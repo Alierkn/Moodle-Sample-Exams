@@ -3,8 +3,8 @@ import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { Loader2, Sparkles, Code2, Globe, Heart, Github, Twitter, Linkedin, LogIn, UserPlus, BookOpen, Database } from 'lucide-react';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
-import ChallengesPage from './components/Challenges/ChallengesPage';
-import ResourcesPage from './components/Resources/ResourcesPage';
+import ChallengePage from './components/challenges/ChallengePage';
+import ResourcesPage from './components/resources/ResourcesPage';
 import { authService } from './services/supabase';
 
 const ResponsiveNavbar = ({ user, onLogout }) => (
@@ -333,7 +333,7 @@ const AppContent = () => {
           <div className="container mx-auto px-4 py-8 animate-fade-in">
             <Routes>
               <Route path="/" element={<HomePage user={user} handleAuthSuccess={handleAuthSuccess} />} />
-              <Route path="/challenges" element={<ChallengesPage user={user} />} />
+              <Route path="/challenges" element={<ChallengePage user={user} />} />
               <Route path="/resources" element={<ResourcesPage user={user} />} />
               <Route path="/login" element={
                 <div className="flex justify-center items-center py-8">
