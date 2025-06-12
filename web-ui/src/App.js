@@ -1,21 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router } from 'react-router-dom';
 import './App.css';
+import './styles/theme.css';
 
 // Components
-import AuthForms from './components/auth/AuthForms';
-import ChallengePage from './components/challenges/ChallengePage';
-import DocumentsPage from './components/Documents/DocumentsPage';
-import ProfilePage from './components/profile/ProfilePage';
 import ResponsiveNavbar from './components/common/ResponsiveNavbar';
+import AnimatedRoutes from './components/common/AnimatedRoutes';
 
 // Services
 import { getCurrentUser, logout } from './services/supabaseService';
 
 // Context
 import { ToastProvider, useToast } from './context/ToastContext';
-
-
+import { ThemeProvider } from './context/ThemeContext';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -76,64 +73,17 @@ function AppContent() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-100">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-theme">
         {/* Navigation */}
         <ResponsiveNavbar user={user} onLogout={handleLogout} />
         
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
-          <Routes>
-            <Route path="/" element={
-              <div className="text-center py-12">
-                <h1 className="text-4xl font-bold mb-6">Welcome to Moodle Exam Simulator</h1>
-                <p className="text-xl mb-8">Practice programming challenges in a Moodle-like environment</p>
-                
-                {user ? (
-                  <div className="flex justify-center space-x-6">
-                    <Link 
-                      to="/challenges" 
-                      className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg text-lg"
-                    >
-                      Start Practicing
-                    </Link>
-                    <Link 
-                      to="/documents" 
-                      className="bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg text-lg"
-                    >
-                      View Documents
-                    </Link>
-                  </div>
-                ) : (
-                  <Link 
-                    to="/login" 
-                    className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg text-lg"
-                  >
-                    Login to Start
-                  </Link>
-                )}
-              </div>
-            } />
-            
-            <Route path="/login" element={
-              user ? <Navigate to="/" /> : <AuthForms onAuthSuccess={handleAuthSuccess} />
-            } />
-            
-            <Route path="/challenges" element={
-              user ? <ChallengePage /> : <Navigate to="/login" />
-            } />
-            
-            <Route path="/documents" element={
-              user ? <DocumentsPage /> : <Navigate to="/login" />
-            } />
-            
-            <Route path="/profile" element={
-              user ? <ProfilePage /> : <Navigate to="/login" />
-            } />
-          </Routes>
+          <AnimatedRoutes user={user} handleAuthSuccess={handleAuthSuccess} />
         </main>
         
         {/* Footer */}
-        <footer className="bg-gray-800 text-white py-6">
+        <footer className="bg-gray-800 dark:bg-gray-950 text-white py-6">
           <div className="container mx-auto px-4 text-center">
             <p>&copy; {new Date().getFullYear()} Moodle Exam Simulator</p>
             <p className="text-sm text-gray-400 mt-2">A tool to help students practice for programming exams</p>
@@ -144,12 +94,14 @@ function AppContent() {
   );
 }
 
-// Wrapper component that provides the ToastProvider context
+// Wrapper component that provides context providers
 function App() {
   return (
-    <ToastProvider>
-      <AppContent />
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

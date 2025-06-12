@@ -1,0 +1,104 @@
+/* Base theme styles */
+:root {
+  --primary-bg: #ffffff;
+  --secondary-bg: #f3f4f6;
+  --card-bg: #ffffff;
+  --primary-text: #1f2937;
+  --secondary-text: #4b5563;
+  --border-color: #e5e7eb;
+  --accent-color: #3b82f6;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Dark theme styles */
+.dark {
+  --primary-bg: #111827;
+  --secondary-bg: #1f2937;
+  --card-bg: #1f2937;
+  --primary-text: #f9fafb;
+  --secondary-text: #d1d5db;
+  --border-color: #374151;
+  --accent-color: #60a5fa;
+  --success-color: #34d399;
+  --warning-color: #fbbf24;
+  --error-color: #f87171;
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Apply theme variables */
+body {
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Card styles */
+.bg-white {
+  background-color: var(--card-bg);
+}
+
+.dark .bg-white {
+  background-color: var(--card-bg);
+}
+
+/* Text colors */
+.text-gray-600, .text-gray-700 {
+  color: var(--secondary-text);
+}
+
+/* Border colors */
+.border, .border-b {
+  border-color: var(--border-color);
+}
+
+/* Shadow styles */
+.shadow-md, .shadow-sm, .shadow {
+  box-shadow: var(--shadow);
+}
+
+/* Transitions for smooth theme switching */
+.transition-theme {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+/* Form inputs */
+input, select, textarea {
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  border-color: var(--border-color);
+}
+
+.dark input, .dark select, .dark textarea {
+  background-color: var(--secondary-bg);
+}
+
+/* Navigation */
+.dark .bg-blue-600 {
+  background-color: #1e40af; /* Darker blue in dark mode */
+}
+
+/* Footer */
+.dark .bg-gray-800 {
+  background-color: #111827; /* Darker gray in dark mode */
+}
+
+/* Code editor theme */
+.dark .code-editor {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+
+/* Animations */
+@keyframes fadeInDark {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dark .animate-fade-in {
+  animation: fadeInDark 0.3s ease-in-out;
+}
