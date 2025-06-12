@@ -1,15 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize the Supabase client
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://your-project-url.supabase.co';
+const supabaseKey = process.env.REACT_APP_SUPABASE_KEY || 'your-anon-key';
 
 // Check if environment variables are set
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('Supabase environment variables are not set. Authentication will not work properly.');
+if (!supabaseUrl || !supabaseKey || supabaseUrl === 'https://your-project-url.supabase.co') {
+  console.warn('Supabase environment variables are not set or are using default values. Authentication will not work properly.');
+  console.warn('Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY in your .env file.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Create a mock client if we're in development and no valid credentials
+let supabase;
+try {
+  supabase = createClient(supabaseUrl, supabaseKey);
+} catch (error) {
+  console.error('Failed to initialize Supabase client:', error);
+  // Provide a mock client for development that won't throw errors
+  supabase = {
+    auth: {
+      signUp: () => Promise.resolve({ user: null, error: { message: 'Mock: Supabase not configured' } }),
+      signInWithPassword: () => Promise.resolve({ user: null, error: { message: 'Mock: Supabase not configured' } }),
+      signOut: () => Promise.resolve({ error: null }),
+      getUser: () => Promise.resolve({ user: null }),
+    },
+  };
+}
 
 /**
  * Authentication service for Supabase
