@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, send_from_directory, redirect, url_fo
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from models import db, User, Challenge, UserChallenge, Resource
 import subprocess
 import tempfile
@@ -9,6 +10,19 @@ import os
 import json
 import sys
 import datetime
+import logging
+import time
+import psutil
+from functools import wraps
+from dotenv import load_dotenv
+
+# Import monitoring and health check modules
+from monitoring import track_performance, api_performance_monitor, track_event, track_errors, logger
+from health_check import health_check_service
+from health_api import health_api
+
+# Load environment variables
+load_dotenv()
 
 # Import Moodle Exam Simulator module
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -17,20 +31,38 @@ try:
 except ImportError:
     print("Moodle Exam Simulator module not found.")
 
+# Logging is now handled by the monitoring module
+
 app = Flask(__name__, static_folder='web-ui/build')
-app.config['SECRET_KEY'] = 'your-secret-key-here'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///moodle_exam_simulator.db'
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///moodle_exam_simulator.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['JSON_SORT_KEYS'] = False  # Preserve JSON order for better performance
+
+# Configure cache settings
+app.config['CACHE_TTL'] = int(os.environ.get('CACHE_TTL', 3600))  # Default 1 hour
+app.config['MAX_RETRIES'] = int(os.environ.get('MAX_RETRIES', 3))
+app.config['RETRY_DELAY'] = int(os.environ.get('RETRY_DELAY', 1000))  # milliseconds
+app.config['API_VERSION'] = os.environ.get('API_VERSION', '1.1.0')
 
 CORS(app, supports_credentials=True)  # Enable Cross-Origin Resource Sharing with credentials
 
 # Initialize database
 db.init_app(app)
 
+# Register health API blueprint
+app.register_blueprint(health_api, url_prefix='/api')
+
 # Initialize login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Performance monitoring is now handled by the monitoring module
+# This legacy decorator is kept for backward compatibility
+def performance_logger(f):
+    return track_performance(f)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -44,19 +76,41 @@ except Exception as e:
     print(f"CodeTester could not be initialized: {e}")
 
 # Create database tables if they don't exist
+# Record application start time for uptime tracking
+app.config['START_TIME'] = time.time()
+
+# Create database tables if they don't exist
 with app.app_context():
     db.create_all()
+    
+    # Log application startup
+    logger.info("MoodleExamSimulator API started", 
+               version="1.0.0",
+               environment=os.environ.get('FLASK_ENV', 'development'),
+               database_url=app.config['SQLALCHEMY_DATABASE_URI'])
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
+@track_performance
 def serve(path):
     if path != "" and os.path.exists(app.static_folder + '/' + path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, 'index.html')
 
+# Legacy health check endpoint is now handled by the health_api blueprint
+# The old endpoint is kept for backward compatibility but redirects to the new one
+@app.route('/api/health-legacy', methods=['GET'])
+@api_performance_monitor('health_check_legacy')
+def health_check_legacy():
+    """Legacy health check endpoint - redirects to the new health API"""
+    logger.info("Legacy health check endpoint accessed - consider updating to /api/health")
+    return redirect('/api/health')
+
 # Authentication routes
 @app.route('/api/register', methods=['POST'])
+@api_performance_monitor('register')
+@track_event('user_registration')
 def register():
     data = request.json
     username = data.get('username')
@@ -132,27 +186,42 @@ def get_user():
 
 @app.route('/api/run-code', methods=['POST'])
 @login_required
+@performance_logger
 def run_code():
     data = request.json
     code = data.get('code', '')
-    language = data.get('language', 'python')
-    expected_output = data.get('expectedOutput', None)
-    challenge_id = data.get('challengeId', None)
+    language = data.get('language', 'python').lower()
+    
+    # Log code execution attempt
+    logger.info(f"Running {language} code, length: {len(code)} characters")
     
     result = {
-        'success': False,
-        'output': '',
-        'error': '',
-        'executionTime': 0,
-        'memoryUsage': 0,
-        'testsPassed': 0,
-        'totalTests': 1,
-        'details': []
+        "success": False,
+        "output": "",
+        "error": "",
+        "executionTime": 0,
+        "testsPassed": 0,
+        "totalTests": 0,
+        "details": []
     }
     
     try:
         if language == 'python':
-            result = code_tester.test_python_code(code, expected_output)
+            # Get expected output and test cases if provided
+            expected_output = data.get('expectedOutput', None)
+            test_cases = data.get('testCases', None)
+            
+            # Use the code tester to run the Python code
+            start_time = time.time()
+            result = code_tester.test_python_code(code, expected_output, test_cases)
+            execution_time = int((time.time() - start_time) * 1000)
+            
+            # Add execution details
+            result['executionTime'] = execution_time
+            result['details'] = [
+                {
+                    'name': 'Test 1: Code Execution',
+                    'passed': result['error'] == '',
                     'time': f"{execution_time}ms"
                 }
             ]
@@ -210,50 +279,73 @@ def run_code():
     return jsonify(result)
 
 @app.route('/api/challenges', methods=['GET'])
+@performance_logger
 def get_challenges():
-    challenges = [
-        {
-            "id": 1,
-            "title": "Python: Fibonacci Sequence",
-            "difficulty": "Easy",
-            "language": "python",
-            "description": "Write a function that returns the nth Fibonacci number",
-            "points": 100,
-            "testCases": 3,
-            "completedBy": 45
-        },
-        {
-            "id": 2,
-            "title": "Neo4j: Social Network Analysis",
-            "difficulty": "Medium",
-            "language": "neo4j",
-            "description": "Find the 5 people with the most connections",
-            "points": 200,
-            "testCases": 5,
-            "completedBy": 23
-        },
-        {
-            "id": 3,
-            "title": "MongoDB: Aggregation Pipeline",
-            "difficulty": "Hard",
-            "language": "mongodb",
-            "description": "Group and sum product sales by category",
-            "points": 300,
-            "testCases": 7,
-            "completedBy": 12
-        },
-        {
-            "id": 4,
-            "title": "SQL: JOIN Operations",
-            "difficulty": "Medium",
-            "language": "sql",
-            "description": "Join 3 tables using JOIN operations",
-            "points": 250,
-            "testCases": 4,
-            "completedBy": 34
-        }
-    ]
-    return jsonify(challenges)
+    try:
+        # Check if we should get challenges from database
+        from_db = request.args.get('from_db', 'false').lower() == 'true'
+        
+        if from_db:
+            # Get challenges from database
+            challenges_db = Challenge.query.all()
+            challenges = [{
+                "id": c.id,
+                "title": c.title,
+                "difficulty": c.difficulty,
+                "language": c.language,
+                "description": c.description,
+                "points": c.points,
+                "testCases": len(json.loads(c.test_cases)) if c.test_cases else 0,
+                "completedBy": len(c.solved_by)
+            } for c in challenges_db]
+        else:
+            # Return mock challenges if database is not ready
+            challenges = [
+                {
+                    "id": 1,
+                    "title": "Python: Fibonacci Sequence",
+                    "difficulty": "Easy",
+                    "language": "python",
+                    "description": "Write a function that returns the nth Fibonacci number",
+                    "points": 100,
+                    "testCases": 3,
+                    "completedBy": 45
+                },
+                {
+                    "id": 2,
+                    "title": "Neo4j: Social Network Analysis",
+                    "difficulty": "Medium",
+                    "language": "neo4j",
+                    "description": "Find the 5 people with the most connections",
+                    "points": 200,
+                    "testCases": 5,
+                    "completedBy": 23
+                },
+                {
+                    "id": 3,
+                    "title": "MongoDB: Aggregation Pipeline",
+                    "difficulty": "Hard",
+                    "language": "mongodb",
+                    "description": "Group and sum product sales by category",
+                    "points": 300,
+                    "testCases": 7,
+                    "completedBy": 12
+                },
+                {
+                    "id": 4,
+                    "title": "SQL: JOIN Operations",
+                    "difficulty": "Medium",
+                    "language": "sql",
+                    "description": "Join 3 tables using JOIN operations",
+                    "points": 250,
+                    "testCases": 4,
+                    "completedBy": 34
+                }
+            ]
+        return jsonify(challenges)
+    except Exception as e:
+        logger.error(f"Error getting challenges: {str(e)}")
+        return jsonify({"error": "Failed to retrieve challenges"}), 500
 
 @app.route('/api/leaderboard', methods=['GET'])
 def get_leaderboard():
@@ -266,5 +358,17 @@ def get_leaderboard():
     ]
     return jsonify(leaderboard)
 
+# This endpoint is now handled by the health_api blueprint
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Log system information at startup
+    logger.info("System information", 
+               cpu_count=psutil.cpu_count(),
+               memory_total=psutil.virtual_memory().total,
+               python_version=sys.version)
+    
+    # Use Gunicorn in production
+    if os.environ.get('FLASK_ENV') == 'production':
+        app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    else:
+        app.run(debug=True, port=5000)

@@ -1,0 +1,241 @@
+version: '3.8'
+
+# MoodleExamSimulator Docker Compose Configuration
+# This file defines all services required to run the complete system
+
+services:
+  # Neo4j database
+  neo4j:
+    image: neo4j:4.4
+    container_name: moodle_neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-password}
+      - NEO4J_dbms_memory_heap_max__size=${NEO4J_HEAP_SIZE:-1G}
+      - NEO4J_dbms_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE:-512M}
+      - NEO4J_dbms_logs_debug_level=${NEO4J_LOG_LEVEL:-INFO}
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - moodle_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB database
+  mongodb:
+    image: mongo:5.0
+    container_name: moodle_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-password}
+      - MONGO_INITDB_DATABASE=moodle
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - moodle_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MySQL database
+  mysql:
+    image: mysql:8.0
+    container_name: moodle_mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:-password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-moodle}
+      - MYSQL_USER=${MYSQL_USER:-moodle}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-moodle}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - moodle_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD:-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flask web API
+  web_api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: moodle_web_api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=web_api.py
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - FLASK_DEBUG=${FLASK_DEBUG:-0}
+      - SECRET_KEY=${SECRET_KEY:-default_secret_key_change_in_production}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///moodle_exam.db}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - NEO4J_HOST=neo4j
+      - NEO4J_PORT=7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_USERNAME=${MONGO_USERNAME:-admin}
+      - MONGO_PASSWORD=${MONGO_PASSWORD:-password}
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-moodle}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-moodle}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-moodle}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CACHE_TTL=${CACHE_TTL:-300}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - RETRY_DELAY=${RETRY_DELAY:-1000}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks:
+      - moodle_network
+    volumes:
+      - ./:/app
+      - api_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: moodle_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - moodle_network
+    depends_on:
+      - web_api
+
+  # Grafana dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: moodle_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - moodle_network
+    depends_on:
+      - prometheus
+
+  # React frontend
+  frontend:
+    build:
+      context: ./web-ui
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:5000}
+        - REACT_APP_ENV=${REACT_APP_ENV:-production}
+    container_name: moodle_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      web_api:
+        condition: service_healthy
+    networks:
+      - moodle_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  moodle_network:
+    driver: bridge
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  mongo_data:
+  mysql_data:
+  api_logs:
+  prometheus_data:
+  grafana_data:

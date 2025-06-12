@@ -4,7 +4,17 @@ Supabase client for the Moodle Exam Simulator
 from supabase import create_client, Client
 import json
 import os
-from typing import Dict, List, Any, Optional, Union
+import datetime
+import time
+import threading
+from functools import wraps
+from typing import Dict, List, Any, Optional, Union, Callable
+from dotenv import load_dotenv
+
+# Import monitoring, caching, and retry modules
+from monitoring import logger, track_performance, api_performance_monitor, track_errors
+from cache_manager import cached
+from retry_manager import with_retry
 from supabase_config import (
     SUPABASE_URL, 
     SUPABASE_KEY, 
@@ -17,17 +27,48 @@ from supabase_config import (
     RESOURCES_TABLE
 )
 
+# Load environment variables
+load_dotenv()
+
 class SupabaseClient:
     """
-    A client for interacting with Supabase
+    A client for interacting with Supabase with optimized connection handling and caching
     """
+    _instance = None
+    _lock = threading.Lock()
+    _cache = {}
+    _cache_ttl = {}
+    
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(SupabaseClient, cls).__new__(cls)
+                cls._instance.supabase = None
+                cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self):
         """
-        Initialize the Supabase client
+        Initialize the Supabase client with connection pooling
         """
-        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        self._initialize_storage()
+        if self._initialized:
+            return
+            
+        # Get configuration from environment variables or fallback to config file
+        supabase_url = os.environ.get('SUPABASE_URL', SUPABASE_URL)
+        supabase_key = os.environ.get('SUPABASE_KEY', SUPABASE_KEY)
+        
+        if self.supabase is None:
+            self.supabase: Client = create_client(supabase_url, supabase_key)
+            self._initialize_storage()
+            self._cache_ttl_seconds = int(os.environ.get('CACHE_TTL', 300))  # Default 5 minutes cache TTL
+            
+            logger.info("Supabase client initialized", 
+                       cache_ttl=self._cache_ttl_seconds)
+            
+        self._initialized = True
     
+    @track_performance
     def _initialize_storage(self):
         """
         Initialize storage buckets if they don't exist
@@ -38,12 +79,39 @@ class SupabaseClient:
             for bucket in buckets:
                 try:
                     self.supabase.storage.get_bucket(bucket)
+                    logger.debug(f"Storage bucket exists: {bucket}")
                 except Exception:
                     self.supabase.storage.create_bucket(bucket)
+                    logger.info(f"Created storage bucket: {bucket}")
+            
+            logger.info("Storage initialization complete", bucket_count=len(buckets))
         except Exception as e:
-            print(f"Error initializing storage: {e}")
+            logger.error(f"Error initializing storage: {str(e)}")
+            raise
+            
+    # Use the retry_manager module instead of this custom implementation
+    def retry_on_error(max_retries=3, delay=1):
+        """
+        Legacy decorator to retry operations on failure
+        Now uses the retry_manager module internally
+        """
+        return with_retry(max_retries=max_retries, retry_delay=delay*1000)
+        
+    @track_performance
+    def clear_cache(self):
+        """
+        Clear the cache
+        """
+        with self._lock:
+            cache_size = len(self._cache)
+            self._cache = {}
+            self._cache_ttl = {}
+            logger.info(f"Supabase cache cleared", items_cleared=cache_size)
     
     # User management
+    @track_performance
+    @api_performance_monitor('register_user')
+    @with_retry(max_retries=3, retry_delay=1000)
     def register_user(self, email: str, password: str, username: str) -> Dict[str, Any]:
         """
         Register a new user with Supabase Auth and store additional user data
@@ -79,6 +147,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @api_performance_monitor('login_user')
+    @with_retry(max_retries=3, retry_delay=1000)
     def login_user(self, email: str, password: str) -> Dict[str, Any]:
         """
         Login a user with Supabase Auth
@@ -108,6 +179,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=300)  # Cache user data for 5 minutes
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_user(self, user_id: str) -> Dict[str, Any]:
         """
         Get user data from the users table
@@ -125,6 +199,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=60)  # Cache profile for 1 minute as it changes frequently
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_user_profile(self, user_id: str) -> Dict[str, Any]:
         """
         Get enhanced user profile with statistics and recent activities
@@ -208,6 +285,9 @@ class SupabaseClient:
             return {"success": False, "error": str(e)}
     
     # Document management
+    @track_performance
+    @api_performance_monitor('upload_document')
+    @with_retry(max_retries=5, retry_delay=2000)  # More retries for uploads
     def upload_document(self, file_path: str, file_name: str, user_id: str) -> Dict[str, Any]:
         """
         Upload a document to Supabase Storage
@@ -235,6 +315,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=3600)  # Cache documents for 1 hour
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_document(self, storage_path: str) -> Dict[str, Any]:
         """
         Get a document from Supabase Storage
@@ -250,6 +333,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=300)  # Cache document list for 5 minutes
+    @with_retry(max_retries=3, retry_delay=1000)
     def list_documents(self, user_id: str) -> Dict[str, Any]:
         """
         List all documents for a user
@@ -275,6 +361,9 @@ class SupabaseClient:
             return {"success": False, "error": str(e)}
     
     # Challenge management
+    @track_performance
+    @api_performance_monitor('create_challenge')
+    @with_retry(max_retries=3, retry_delay=1000)
     def create_challenge(self, challenge_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new challenge
@@ -289,20 +378,29 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=300)  # Cache challenges for 5 minutes
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_challenges(self) -> Dict[str, Any]:
         """
-        Get all challenges
+        Get all challenges with caching
         """
         try:
             result = self.supabase.table(CHALLENGES_TABLE).select("*").execute()
             
+            # No need to manually update cache anymore
+            
             return {
                 "success": True,
-                "challenges": result.data
+                "challenges": result.data,
+                "cached": False
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=300)  # Cache individual challenges for 5 minutes
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_challenge(self, challenge_id: str) -> Dict[str, Any]:
         """
         Get a challenge by ID
@@ -321,6 +419,9 @@ class SupabaseClient:
             return {"success": False, "error": str(e)}
     
     # User challenge management
+    @track_performance
+    @api_performance_monitor('submit_challenge_solution')
+    @with_retry(max_retries=3, retry_delay=1000)
     def submit_challenge_solution(self, user_id: str, challenge_id: str, solution: str, execution_time: float) -> Dict[str, Any]:
         """
         Submit a solution for a challenge
@@ -352,6 +453,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=60)  # Cache user challenges for 1 minute
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_user_challenges(self, user_id: str) -> Dict[str, Any]:
         """
         Get all challenges completed by a user
@@ -367,6 +471,9 @@ class SupabaseClient:
             return {"success": False, "error": str(e)}
     
     # Resource management
+    @track_performance
+    @api_performance_monitor('create_resource')
+    @with_retry(max_retries=3, retry_delay=1000)
     def create_resource(self, resource_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new resource
@@ -381,6 +488,9 @@ class SupabaseClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    @track_performance
+    @cached(ttl=600)  # Cache resources for 10 minutes
+    @with_retry(max_retries=3, retry_delay=1000)
     def get_resources(self) -> Dict[str, Any]:
         """
         Get all resources

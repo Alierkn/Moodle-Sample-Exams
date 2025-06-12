@@ -1,8 +1,21 @@
-# Moodle Exam Simulator with Supabase Integration
+# Moodle Exam Simulator with Supabase Integration - Optimized
+
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/yourusername/moodle-exam-simulator)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://github.com/yourusername/moodle-exam-simulator)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/yourusername/moodle-exam-simulator)
 
 This project provides a comprehensive system that simulates the Moodle exam environment with Supabase backend integration. It allows students to practice with different programming languages and database technologies before exams.
 
 ## 🚀 Features
+
+### 0. System Optimizations (New!)
+- **Database Connection Pooling**: Optimized connections for SQLAlchemy, MongoDB, Neo4j, and MySQL
+- **Performance Monitoring**: Comprehensive API and database performance tracking with Prometheus and Grafana
+- **Caching**: Thread-safe Supabase client with TTL caching and automatic cleanup
+- **Retry Mechanism**: Robust retry with exponential backoff for all database and API operations
+- **Containerization**: Enhanced Docker Compose with resource limits, health checks, and monitoring
+- **Unit Testing**: Comprehensive test suite for backend components
+- **Centralized Logging**: Structured logging with context for all operations
 
 ### 1. Multiple Language/Technology Support
 - **Python**: Code execution, syntax checking, test cases
@@ -36,14 +49,36 @@ This project provides a comprehensive system that simulates the Moodle exam envi
 
 ## 📋 Installation
 
-### Backend Requirements:
+### Quick Setup (Recommended)
+
+We've created a setup script to make installation easier:
+
 ```bash
-pip install docker pymongo neo4j mysql-connector-python psycopg2-binary flask flask-cors
+# Make the setup script executable
+chmod +x setup.sh
+
+# Run the setup script
+./setup.sh
+```
+
+The setup script will:
+1. Check for required dependencies
+2. Set up a Python virtual environment
+3. Install all required Python packages
+4. Create a default .env file if needed
+5. Install frontend dependencies
+6. Optionally start all Docker containers
+
+### Manual Installation
+
+#### Backend Requirements:
+```bash
+pip install -r requirements.txt
 ```
 
 - Docker Desktop must be installed and running
 
-### Frontend Requirements:
+#### Frontend Requirements:
 ```bash
 cd web-ui
 npm install
@@ -54,10 +89,25 @@ npm install
 python moodle_exam_simulator.py
 ```
 
-### Run the Web API and Frontend:
+### Run with Docker (Recommended):
+```bash
+# Start all services with Docker Compose
+docker-compose up -d
+```
+
+This will start:
+- Neo4j database (port 7474, 7687)
+- MongoDB database (port 27017)
+- MySQL database (port 3306)
+- Flask web API (port 5000)
+- React frontend (port 3000)
+- Prometheus monitoring (port 9090)
+- Grafana dashboards (port 3001)
+
+### Run Manually:
 ```bash
 # Start the API
-python web_api_supabase.py
+python web_api.py
 
 # Start the frontend in a separate terminal window
 cd web-ui
@@ -65,6 +115,40 @@ npm start
 ```
 
 You can access the web interface from your browser at http://localhost:3000.
+
+## 🧪 Testing
+
+We've added comprehensive unit tests for the backend components:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_supabase_client.py
+pytest tests/test_db_manager.py
+
+# Run with coverage report
+pytest --cov=. tests/
+
+# Run performance tests
+pytest tests/performance/
+```
+
+### Health Checks
+
+The system includes health check endpoints to verify component status:
+
+```bash
+# Check overall system health
+curl http://localhost:5000/api/health
+
+# Check database connections
+curl http://localhost:5000/api/health/database
+
+# Check Supabase connection
+curl http://localhost:5000/api/health/supabase
+```
 
 ## 🚀 Deployment
 
@@ -151,3 +235,74 @@ HAVING AVG(g.score) > 70
 - **Data Structures**: Understand the features of each database
 
 With this system, you can detect and practice issues caused by compiler differences in Moodle before your exams!
+
+## 📊 System Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  React Frontend │────▶│   Flask API     │────▶│   Supabase      │
+│                 │     │  (with caching) │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │
+                               ▼
+                        ┌─────────────────┐
+                        │  Database Layer │
+                        │  - Connection   │
+                        │    Pooling      │
+                        │  - Retry Logic  │
+                        │  - Monitoring   │
+                        └─────────────────┘
+                               │
+                               ▼
+                        ┌─────────────────┐
+                        │  Docker         │
+                        │  Containers     │
+                        │  - Neo4j        │
+                        │  - MongoDB      │
+                        │  - MySQL        │
+                        └─────────────────┘
+                               │
+                               ▼
+                        ┌─────────────────┐
+                        │  Monitoring     │
+                        │  - Prometheus   │
+                        │  - Grafana      │
+                        │    Dashboards   │
+                        └─────────────────┘
+```
+
+## 🔍 Monitoring & Performance
+
+The system includes comprehensive monitoring and performance tracking:
+
+### Prometheus Metrics
+- API response times by endpoint
+- Database query performance
+- Cache hit/miss rates
+- Error rates and types
+- System resource utilization
+
+### Grafana Dashboards
+Access the pre-configured dashboards at http://localhost:3001 (default credentials: admin/admin):
+
+- **Main Dashboard**: Overview of system performance
+- **API Performance**: Detailed endpoint response times and request rates
+- **Database Performance**: Query times and connection pool utilization
+- **Error Tracking**: Real-time error monitoring and alerting
+
+### Performance Tuning
+Adjust the following parameters in your `.env` file for optimal performance:
+
+- `CACHE_TTL`: Cache time-to-live in seconds
+- `MAX_RETRIES`: Maximum retry attempts for failed operations
+- `RETRY_DELAY`: Base delay between retries in milliseconds
+- `*_POOL_SIZE`: Database connection pool sizes
+
+## 🛠️ Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
