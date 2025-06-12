@@ -719,6 +719,4 @@ const ChallengePage = React.memo(() => {
   );
 };
 
-});
-
 export default ChallengePage;
