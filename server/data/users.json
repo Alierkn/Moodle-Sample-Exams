@@ -1,0 +1,35 @@
+[
+  {
+    "id": "user-1",
+    "username": "admin",
+    "password": "$2a$10$XJrSPLXGI5hMCYZgB4zQn.iVK5TKdB9xCpIUUVeEwQpEYvtUVa.4W", 
+    "email": "admin@example.com",
+    "role": "admin",
+    "createdAt": "2025-06-01T00:00:00Z",
+    "points": 25,
+    "streak": 3,
+    "lastActive": "2025-06-11T16:30:00Z"
+  },
+  {
+    "id": "user-2",
+    "username": "student1",
+    "password": "$2a$10$XJrSPLXGI5hMCYZgB4zQn.iVK5TKdB9xCpIUUVeEwQpEYvtUVa.4W",
+    "email": "student1@example.com",
+    "role": "student",
+    "createdAt": "2025-06-01T00:00:00Z",
+    "points": 15,
+    "streak": 2,
+    "lastActive": "2025-06-10T14:20:00Z"
+  },
+  {
+    "id": "user-3",
+    "username": "student2",
+    "password": "$2a$10$XJrSPLXGI5hMCYZgB4zQn.iVK5TKdB9xCpIUUVeEwQpEYvtUVa.4W",
+    "email": "student2@example.com",
+    "role": "student",
+    "createdAt": "2025-06-01T00:00:00Z",
+    "points": 5,
+    "streak": 1,
+    "lastActive": "2025-06-10T16:45:00Z"
+  }
+]

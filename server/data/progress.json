@@ -1,0 +1,81 @@
+[
+  {
+    "userId": "user-1",
+    "challengeId": "challenge-1",
+    "completed": true,
+    "score": 10,
+    "attempts": 2,
+    "lastAttemptDate": "2025-06-10T15:30:00Z",
+    "code": "def fibonacci(n):\n    if n <= 0:\n        return 0\n    elif n == 1:\n        return 1\n    else:\n        a, b = 0, 1\n        for _ in range(2, n + 1):\n            a, b = b, a + b\n        return b",
+    "executionTime": 12,
+    "testResults": [
+      {"input": "0", "expected": "0", "actual": "0", "passed": true},
+      {"input": "1", "expected": "1", "actual": "1", "passed": true},
+      {"input": "2", "expected": "1", "actual": "1", "passed": true},
+      {"input": "10", "expected": "55", "actual": "55", "passed": true}
+    ]
+  },
+  {
+    "userId": "user-1",
+    "challengeId": "challenge-3",
+    "completed": true,
+    "score": 15,
+    "attempts": 1,
+    "lastAttemptDate": "2025-06-11T16:30:00Z",
+    "code": "class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        Map<Integer, Integer> map = new HashMap<>();\n        for (int i = 0; i < nums.length; i++) {\n            int complement = target - nums[i];\n            if (map.containsKey(complement)) {\n                return new int[] { map.get(complement), i };\n            }\n            map.put(nums[i], i);\n        }\n        throw new IllegalArgumentException(\"No two sum solution\");\n    }\n}",
+    "executionTime": 24,
+    "testResults": [
+      {"input": "[2,7,11,15], 9", "expected": "[0,1]", "actual": "[0,1]", "passed": true},
+      {"input": "[3,2,4], 6", "expected": "[1,2]", "actual": "[1,2]", "passed": true},
+      {"input": "[3,3], 6", "expected": "[0,1]", "actual": "[0,1]", "passed": true}
+    ]
+  },
+  {
+    "userId": "user-2",
+    "challengeId": "challenge-1",
+    "completed": true,
+    "score": 10,
+    "attempts": 1,
+    "lastAttemptDate": "2025-06-10T14:20:00Z",
+    "code": "def fibonacci(n):\n    if n <= 0:\n        return 0\n    elif n == 1:\n        return 1\n    else:\n        return fibonacci(n-1) + fibonacci(n-2)",
+    "executionTime": 45,
+    "testResults": [
+      {"input": "0", "expected": "0", "actual": "0", "passed": true},
+      {"input": "1", "expected": "1", "actual": "1", "passed": true},
+      {"input": "2", "expected": "1", "actual": "1", "passed": true},
+      {"input": "10", "expected": "55", "actual": "55", "passed": true}
+    ]
+  },
+  {
+    "userId": "user-2",
+    "challengeId": "challenge-2",
+    "completed": true,
+    "score": 5,
+    "attempts": 3,
+    "lastAttemptDate": "2025-06-10T16:45:00Z",
+    "code": "function reverseString(str) {\n    return str.split('').reverse().join('');\n}",
+    "executionTime": 8,
+    "testResults": [
+      {"input": "hello", "expected": "olleh", "actual": "olleh", "passed": true},
+      {"input": "world", "expected": "dlrow", "actual": "dlrow", "passed": true},
+      {"input": "a", "expected": "a", "actual": "a", "passed": true},
+      {"input": "", "expected": "", "actual": "", "passed": true}
+    ]
+  },
+  {
+    "userId": "user-3",
+    "challengeId": "challenge-4",
+    "completed": true,
+    "score": 5,
+    "attempts": 2,
+    "lastAttemptDate": "2025-06-10T16:45:00Z",
+    "code": "def is_palindrome(s):\n    s = ''.join(c.lower() for c in s if c.isalnum())\n    return s == s[::-1]",
+    "executionTime": 10,
+    "testResults": [
+      {"input": "racecar", "expected": "true", "actual": "true", "passed": true},
+      {"input": "hello", "expected": "false", "actual": "false", "passed": true},
+      {"input": "A man, a plan, a canal: Panama", "expected": "true", "actual": "true", "passed": true},
+      {"input": "race a car", "expected": "false", "actual": "false", "passed": true}
+    ]
+  }
+]

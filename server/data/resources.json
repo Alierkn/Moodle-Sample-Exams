@@ -1,0 +1,90 @@
+[
+  {
+    "id": "resource-1",
+    "title": "Python Basics Guide",
+    "description": "A comprehensive guide to Python programming fundamentals including data types, control structures, functions, and modules.",
+    "type": "document",
+    "category": "python",
+    "tags": ["python", "beginners", "tutorial"],
+    "filePath": "/uploads/resources/python_basics_guide.pdf",
+    "uploadDate": "2025-06-01T10:30:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-2",
+    "title": "JavaScript DOM Manipulation",
+    "description": "Learn how to interact with the Document Object Model (DOM) using JavaScript to create dynamic web pages.",
+    "type": "code",
+    "category": "javascript",
+    "tags": ["javascript", "dom", "web-development"],
+    "filePath": "/uploads/resources/javascript_example.js",
+    "uploadDate": "2025-06-02T14:45:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-3",
+    "title": "Java Student Management System",
+    "description": "Example implementation of a Student Management System in Java with sorting and searching functionality.",
+    "type": "code",
+    "category": "java",
+    "tags": ["java", "oop", "data-structures"],
+    "filePath": "/uploads/resources/java_example.java",
+    "uploadDate": "2025-06-03T09:15:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-4",
+    "title": "C++ Binary Search Tree Implementation",
+    "description": "A complete implementation of a Binary Search Tree in C++ with insertion, deletion, and traversal methods.",
+    "type": "code",
+    "category": "cpp",
+    "tags": ["cpp", "data-structures", "algorithms"],
+    "filePath": "/uploads/resources/cpp_example.cpp",
+    "uploadDate": "2025-06-04T16:20:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-5",
+    "title": "HTML/CSS Task Manager UI",
+    "description": "A responsive task manager UI built with HTML, CSS, and JavaScript with localStorage persistence.",
+    "type": "code",
+    "category": "web",
+    "tags": ["html", "css", "javascript", "ui-design"],
+    "filePath": "/uploads/resources/html_css_example.html",
+    "uploadDate": "2025-06-05T11:10:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-6",
+    "title": "SQL University Database Schema",
+    "description": "SQL script for creating a university database with tables for students, courses, professors, and enrollments.",
+    "type": "code",
+    "category": "sql",
+    "tags": ["sql", "database", "schema-design"],
+    "filePath": "/uploads/resources/sql_example.sql",
+    "uploadDate": "2025-06-06T13:40:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-7",
+    "title": "Algorithm Complexity Cheat Sheet",
+    "description": "A reference guide for time and space complexity of common algorithms and data structures.",
+    "type": "document",
+    "category": "algorithms",
+    "tags": ["algorithms", "big-o", "complexity", "reference"],
+    "filePath": "/uploads/resources/algorithm_complexity.pdf",
+    "uploadDate": "2025-06-07T08:50:00Z",
+    "author": "admin"
+  },
+  {
+    "id": "resource-8",
+    "title": "Git Command Reference",
+    "description": "Essential Git commands for version control and collaboration in software development projects.",
+    "type": "document",
+    "category": "tools",
+    "tags": ["git", "version-control", "reference"],
+    "filePath": "/uploads/resources/git_commands.pdf",
+    "uploadDate": "2025-06-08T15:30:00Z",
+    "author": "admin"
+  }
+]
