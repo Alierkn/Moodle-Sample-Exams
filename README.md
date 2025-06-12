@@ -1,6 +1,6 @@
-# Moodle Exam Environment Simulator
+# Moodle Exam Simulator with Supabase Integration
 
-This project provides a comprehensive system that simulates the Moodle exam environment. It allows students to practice with different programming languages and database technologies before exams.
+This project provides a comprehensive system that simulates the Moodle exam environment with Supabase backend integration. It allows students to practice with different programming languages and database technologies before exams.
 
 ## 🚀 Features
 
@@ -57,7 +57,7 @@ python moodle_exam_simulator.py
 ### Run the Web API and Frontend:
 ```bash
 # Start the API
-python web_api.py
+python web_api_supabase.py
 
 # Start the frontend in a separate terminal window
 cd web-ui
@@ -65,6 +65,47 @@ npm start
 ```
 
 You can access the web interface from your browser at http://localhost:3000.
+
+## 🚀 Deployment
+
+### Netlify Deployment (Frontend)
+
+1. Fork or clone this repository
+2. Log in to [Netlify](https://app.netlify.com/)
+3. Click "New site from Git"
+4. Select your repository
+5. Use these build settings:
+   - Base directory: `web-ui`
+   - Build command: `npm run build`
+   - Publish directory: `web-ui/build`
+6. Add these environment variables in Netlify settings:
+   - `REACT_APP_API_URL`: Your backend API URL
+   - `REACT_APP_SUPABASE_URL`: Your Supabase project URL
+   - `REACT_APP_SUPABASE_KEY`: Your Supabase anon key
+7. Deploy the site
+
+### Backend Deployment (Heroku)
+
+1. Create a new Heroku app
+2. Connect your GitHub repository
+3. Add these buildpacks:
+   - `heroku/python`
+4. Add these environment variables:
+   - `SUPABASE_URL`: Your Supabase project URL
+   - `SUPABASE_KEY`: Your Supabase service role key
+   - `FLASK_SECRET_KEY`: A secure random string
+5. Deploy the app
+
+### Supabase Setup
+
+1. Create a new Supabase project at [supabase.com](https://supabase.com/)
+2. Run the SQL commands in `supabase_schema.sql` in the SQL editor
+3. Create storage buckets:
+   - `documents`
+   - `challenges`
+   - `user-solutions`
+4. Set up appropriate bucket policies
+5. Copy your Supabase URL and anon key for frontend configuration
 
 ## 💡 Usage Examples
 

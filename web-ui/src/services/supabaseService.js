@@ -3,7 +3,8 @@
  * This service provides functions to interact with the Supabase backend
  */
 
-const API_URL = 'http://localhost:5000/api';
+// Use environment variable if available, otherwise fallback to localhost
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 /**
  * Register a new user
