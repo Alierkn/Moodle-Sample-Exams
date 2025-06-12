@@ -4,18 +4,23 @@ import './App.css';
 
 // Components
 import AuthForms from './components/auth/AuthForms';
-import ChallengePage from './components/Challenges/ChallengePage';
+import ChallengePage from './components/challenges/ChallengePage';
 import DocumentsPage from './components/Documents/DocumentsPage';
-import ProfilePage from './components/Profile/ProfilePage';
+import ProfilePage from './components/profile/ProfilePage';
+import ResponsiveNavbar from './components/common/ResponsiveNavbar';
 
 // Services
 import { getCurrentUser, logout } from './services/supabaseService';
 
+// Context
+import { ToastProvider, useToast } from './context/ToastContext';
 
 
-function App() {
+
+function AppContent() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { showSuccess, showError } = useToast();
   
   useEffect(() => {
     // Check if user is already logged in
@@ -48,11 +53,17 @@ function App() {
 
   const handleAuthSuccess = (userData) => {
     setUser(userData);
+    showSuccess(`Welcome, ${userData.username || userData.email}!`);
   };
 
   const handleLogout = async () => {
-    await logout();
-    setUser(null);
+    try {
+      await logout();
+      setUser(null);
+      showSuccess('You have been logged out successfully');
+    } catch (error) {
+      showError('Logout failed: ' + error.message);
+    }
   };
 
   if (loading) {
@@ -67,36 +78,7 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gray-100">
         {/* Navigation */}
-        <nav className="bg-blue-600 text-white shadow-md">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center">
-                <Link to="/" className="text-xl font-bold">Moodle Exam Simulator</Link>
-              </div>
-              
-              {user ? (
-                <div className="flex items-center space-x-4">
-                  <Link to="/challenges" className="hover:text-blue-200">Challenges</Link>
-                  <Link to="/documents" className="hover:text-blue-200">Documents</Link>
-                  <Link to="/profile" className="hover:text-blue-200">Profile</Link>
-                  <div className="flex items-center">
-                    <span className="mr-2">{user.username || user.email}</span>
-                    <button 
-                      onClick={handleLogout}
-                      className="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <Link to="/login" className="hover:text-blue-200">Login / Register</Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </nav>
+        <ResponsiveNavbar user={user} onLogout={handleLogout} />
         
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
@@ -159,6 +141,15 @@ function App() {
         </footer>
       </div>
     </Router>
+  );
+}
+
+// Wrapper component that provides the ToastProvider context
+function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 }
 
