@@ -1,32 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lock, BookOpen, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle, Sparkles, GraduationCap } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { authService } from '../../services/supabase';
 
 const Login = ({ onLogin, authError }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(authError || '');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState('');
-
-  // Simulate navigation function
-  const navigate = (path) => {
-    console.log(`Navigating to: ${path}`);
-  };
+  
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Check for success message from registration
   useEffect(() => {
-    const { state } = window.history.state || {};
-    if (state?.message) {
-      setSuccess(state.message);
-      window.history.replaceState({}, document.title);
+    const message = location.state?.message;
+    if (message) {
+      setSuccess(message);
+      // Clear the message from location state
+      navigate(location.pathname, { replace: true, state: {} });
     }
     
     if (authError) {
       setError(authError);
     }
-  }, [authError]);
+  }, [authError, location, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,21 +35,32 @@ const Login = ({ onLogin, authError }) => {
     setSuccess('');
     setLoading(true);
 
-    // Simulate API call
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      if (username && password) {
-        const user = { username, id: 1 };
-        // Simulate localStorage (not actually setting in artifact)
-        console.log('User logged in:', user);
-        onLogin?.(user);
-        navigate('/');
-        setSuccess('Login successful! Redirecting...');
-      } else {
+      if (!email || !password) {
         setError('Please fill in all fields');
+        setLoading(false);
+        return;
+      }
+      
+      // Call Supabase auth service
+      const { success, error, user } = await authService.login(email, password);
+      
+      if (success && user) {
+        // Store user in local storage for persistence
+        localStorage.setItem('user', JSON.stringify(user));
+        
+        // Call the onLogin callback if provided
+        onLogin?.(user);
+        
+        setSuccess('Login successful! Redirecting...');
+        
+        // Redirect to dashboard or home page
+        setTimeout(() => navigate('/'), 1000);
+      } else {
+        setError(error || 'Invalid email or password');
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('An error occurred during login');
     } finally {
       setLoading(false);
@@ -160,11 +172,11 @@ const Login = ({ onLogin, authError }) => {
           <div className="space-y-6">
             <InputField
               icon={User}
-              type="text"
-              name="username"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              name="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
 
             <InputField

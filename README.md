@@ -47,6 +47,13 @@ This project provides a comprehensive system that simulates the Moodle exam envi
 - Language/database selection and customizable parameters
 - Real-time test results
 
+### 6. User Authentication
+- Secure user registration and login with Supabase
+- Email and password authentication
+- User session management and persistence
+- Protected routes and content based on authentication status
+- Password strength validation
+
 ## 📋 Installation
 
 ### Quick Setup (Recommended)
@@ -191,6 +198,43 @@ curl http://localhost:5000/api/health/supabase
 4. Set up appropriate bucket policies
 5. Copy your Supabase URL and anon key for frontend configuration
 
+## 🔐 Authentication
+
+The application now uses Supabase for user authentication:
+
+### Registration
+Users can register with:
+- Email address
+- Username
+- Password (with strength validation)
+
+### Login
+Users can log in with:
+- Email address
+- Password
+
+### Session Management
+- User sessions are persisted using Supabase tokens
+- Automatic session restoration on page reload
+- Secure logout functionality
+
+### Environment Setup
+To configure Supabase authentication:
+
+1. Create a Supabase project at [https://supabase.com](https://supabase.com)
+2. Get your project URL and anon key from the Supabase dashboard
+3. Add these values to your `.env` file:
+
+```
+# Backend .env file
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_KEY=your_supabase_key_here
+
+# Frontend .env file (in web-ui directory)
+REACT_APP_SUPABASE_URL=your_supabase_url_here
+REACT_APP_SUPABASE_KEY=your_supabase_key_here
+```
+
 ## 💡 Usage Examples
 
 ### Python Test:
@@ -242,10 +286,16 @@ With this system, you can detect and practice issues caused by compiler differen
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │                 │     │                 │     │                 │
 │  React Frontend │────▶│   Flask API     │────▶│   Supabase      │
-│                 │     │  (with caching) │     │                 │
+│  - Auth UI      │     │  (with caching) │     │  - Auth Service │
+│  - React Router │     │                 │     │  - User Data    │
+│  - Protected    │     │                 │     │  - Challenge    │
+│    Routes       │     │                 │     │    Storage      │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ▼
+        │  ▲                    │                       ▲
+        │  │                    │                       │
+        │  └────────────────────┼───────────────────────┘
+        │      Direct Auth      │       Token Validation
+        │                       ▼
                         ┌─────────────────┐
                         │  Database Layer │
                         │  - Connection   │

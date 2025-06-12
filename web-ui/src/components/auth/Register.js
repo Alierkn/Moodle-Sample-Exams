@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { User, Mail, Lock, Eye, EyeOff, UserPlus, Check, X, Shield, Star, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { authService } from '../../services/supabase';
 
 const Register = () => {
   const [username, setUsername] = useState('');
@@ -13,10 +15,7 @@ const Register = () => {
   const [focusedField, setFocusedField] = useState('');
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-  // Simulate navigation function
-  const navigate = (path, options) => {
-    console.log(`Navigating to: ${path}`, options);
-  };
+  const navigate = useNavigate();
 
   // Password strength checker
   const checkPasswordStrength = (pass) => {
@@ -50,20 +49,27 @@ const Register = () => {
       return;
     }
 
+    if (!username || !email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2500));
+      // Register with Supabase
+      const { success, error, user } = await authService.register(email, password, username);
       
-      if (username && email && password) {
+      if (success && user) {
+        // Redirect to login with success message
         navigate('/login', { 
           state: { message: 'Registration successful! Please log in.' } 
         });
       } else {
-        setError('Please fill in all fields');
+        setError(error || 'Registration failed. Please try again.');
       }
     } catch (err) {
+      console.error('Registration error:', err);
       setError('An error occurred during registration');
     } finally {
       setLoading(false);

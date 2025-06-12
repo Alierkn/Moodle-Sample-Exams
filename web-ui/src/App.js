@@ -1,30 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Sparkles, Code2, Globe, Heart, Github, Twitter, Linkedin } from 'lucide-react';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Loader2, Sparkles, Code2, Globe, Heart, Github, Twitter, Linkedin, LogIn, UserPlus } from 'lucide-react';
+import Login from './components/auth/Login';
+import Register from './components/auth/Register';
+import { authService } from './services/supabase';
 
-// Mock components for demonstration
 const ResponsiveNavbar = ({ user, onLogout }) => (
   <nav className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/30 dark:border-gray-700/30 sticky top-0 z-50 transition-all duration-300">
     <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-      <div className="flex items-center gap-3">
+      <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
         <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
           <Code2 className="w-6 h-6 text-white" />
         </div>
         <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           Moodle Simulator
         </span>
+      </Link>
+      
+      <div className="hidden md:flex items-center gap-6">
+        <Link to="/" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          Home
+        </Link>
+        <Link to="/challenges" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          Challenges
+        </Link>
+        <Link to="/resources" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          Resources
+        </Link>
       </div>
+      
       {user ? (
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600 dark:text-gray-300">Welcome, {user.username || user.email}</span>
+          <span className="text-sm text-gray-600 dark:text-gray-300">
+            Welcome, {user.profile?.username || user.email || 'User'}
+          </span>
           <button 
             onClick={onLogout}
-            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200"
+            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200 flex items-center gap-2"
           >
             Logout
           </button>
         </div>
       ) : (
-        <div className="text-sm text-gray-600 dark:text-gray-300">Not logged in</div>
+        <div className="flex items-center gap-3">
+          <Link to="/login" className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+            Login
+          </Link>
+          <Link to="/register" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 text-sm">
+            Register
+          </Link>
+        </div>
       )}
     </div>
   </nav>
@@ -43,12 +68,22 @@ const AnimatedRoutes = ({ user, handleAuthSuccess }) => (
         Your routes and content would be rendered here based on the current navigation state.
       </p>
       {!user && (
-        <button 
-          onClick={() => handleAuthSuccess({ username: 'demo', email: 'demo@example.com' })}
-          className="mt-6 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
-        >
-          Demo Login
-        </button>
+        <div className="flex gap-4 mt-6">
+          <Link 
+            to="/login"
+            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-2"
+          >
+            <LogIn size={18} />
+            Login
+          </Link>
+          <Link 
+            to="/register"
+            className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-2"
+          >
+            <UserPlus size={18} />
+            Register
+          </Link>
+        </div>
       )}
     </div>
   </div>
@@ -115,28 +150,47 @@ const ThemeProvider = ({ children }) => {
   );
 };
 
-// Mock services
+// Authentication services using Supabase
 const getCurrentUser = async () => {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve({ success: false, user: null });
-    }, 1000);
-  });
+  try {
+    // First check localStorage for cached user data
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      return JSON.parse(userStr);
+    }
+    
+    // If not in localStorage, check with Supabase
+    const { success, user } = await authService.getCurrentUser();
+    if (success && user) {
+      localStorage.setItem('user', JSON.stringify(user));
+      return user;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
 };
 
 const logout = async () => {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve({ success: true });
-    }, 500);
-  });
+  try {
+    await authService.logout();
+    localStorage.removeItem('user');
+    return true;
+  } catch (error) {
+    console.error('Error logging out:', error);
+    return false;
+  }
 };
 
-function AppContent() {
+const AppContent = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const { showSuccess, showError } = useToast();
+  const toast = React.useContext(ToastContext);
+  const { theme } = React.useContext(ThemeContext);
+  const navigate = useNavigate();
   
   useEffect(() => {
     // Mouse tracking for dynamic effects
@@ -148,54 +202,49 @@ function AppContent() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
   
-  useEffect(() => {
-    // Enhanced auth check with better UX
-    const checkAuth = async () => {
-      try {
-        // Simulate minimum loading time for better UX
-        const [authResult] = await Promise.all([
-          getCurrentUser(),
-          new Promise(resolve => setTimeout(resolve, 800))
-        ]);
-        
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-        
-        if (authResult.success) {
-          setUser(authResult.user);
-        } else {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('Auth check error:', error);
-        showError('Failed to verify authentication');
-      } finally {
-        setLoading(false);
+  const checkAuth = async () => {
+    setLoading(true);
+    try {
+      const userData = await getCurrentUser();
+      if (userData) {
+        setUser(userData);
+        toast.showSuccess(`Welcome back, ${userData.profile?.username || userData.email || 'User'}!`);
       }
-    };
-    
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      toast.showError('Authentication error');
+    } finally {
+      // Add a small delay for smoother UX
+      setTimeout(() => {
+        setLoading(false);
+      }, 500);
+    }
+  };
+
+  useEffect(() => {
     checkAuth();
-  }, [showError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAuthSuccess = (userData) => {
     setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    showSuccess(`Welcome back, ${userData.username || userData.email}! 🎉`);
+    toast.showSuccess(`Welcome, ${userData.profile?.username || userData.email || 'User'}!`);
+    navigate('/');
   };
 
   const handleLogout = async () => {
     try {
-      await logout();
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setUser(null);
-      showSuccess('Successfully logged out. See you soon! 👋');
+      const success = await logout();
+      if (success) {
+        setUser(null);
+        toast.showSuccess('Logged out successfully');
+        navigate('/');
+      } else {
+        toast.showError('Logout failed');
+      }
     } catch (error) {
-      showError('Logout failed: ' + error.message);
+      console.error('Logout error:', error);
+      toast.showError('Logout failed');
     }
   };
 
@@ -252,11 +301,22 @@ function AppContent() {
       {/* Navigation */}
       <ResponsiveNavbar user={user} onLogout={handleLogout} />
       
-      {/* Main Content */}
-      <main className="relative z-10 container mx-auto px-4 py-8">
-        <div className="animate-fade-in">
-          <AnimatedRoutes user={user} handleAuthSuccess={handleAuthSuccess} />
-        </div>
+      {/* Main content */}
+      <main className="flex-grow">
+        {loading ? (
+          <div className="min-h-[60vh] flex flex-col items-center justify-center">
+            <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+            <p className="text-gray-600 dark:text-gray-300">Loading...</p>
+          </div>
+        ) : (
+          <div className="container mx-auto px-4 py-8 animate-fade-in">
+            <Routes>
+              <Route path="/" element={<AnimatedRoutes user={user} handleAuthSuccess={handleAuthSuccess} />} />
+              <Route path="/login" element={<Login onLogin={handleAuthSuccess} />} />
+              <Route path="/register" element={<Register />} />
+            </Routes>
+          </div>
+        )}
       </main>
       
       {/* Enhanced Footer */}

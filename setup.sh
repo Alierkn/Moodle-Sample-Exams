@@ -148,6 +148,23 @@ if [ -d "web-ui" ]; then
         echo -e "${YELLOW}Installing frontend dependencies...${NC}"
         npm install
         echo -e "${GREEN}Frontend dependencies installed!${NC}"
+        
+        # Create frontend .env file with Supabase configuration
+        echo -e "${YELLOW}Creating frontend .env file...${NC}"
+        if [ ! -f ".env" ]; then
+            # Extract Supabase values from main .env file
+            SUPABASE_URL=$(grep SUPABASE_URL ../\.env | cut -d '=' -f2)
+            SUPABASE_KEY=$(grep SUPABASE_KEY ../\.env | cut -d '=' -f2)
+            
+            cat > .env << EOF
+REACT_APP_SUPABASE_URL=${SUPABASE_URL}
+REACT_APP_SUPABASE_KEY=${SUPABASE_KEY}
+REACT_APP_API_URL=http://localhost:5000
+EOF
+            echo -e "${GREEN}Frontend .env file created!${NC}"
+        else
+            echo -e "${GREEN}Frontend .env file already exists.${NC}"
+        fi
     else
         echo -e "${RED}package.json not found in web-ui directory.${NC}"
     fi
