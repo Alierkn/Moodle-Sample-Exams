@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-ro
 import './App.css';
 
 // Components
-import AuthForms from './components/Auth/AuthForms';
+import AuthForms from './components/auth/AuthForms';
 import ChallengePage from './components/Challenges/ChallengePage';
 import DocumentsPage from './components/Documents/DocumentsPage';
 import ProfilePage from './components/Profile/ProfilePage';
