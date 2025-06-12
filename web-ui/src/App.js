@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { Loader2, Sparkles, Code2, Globe, Heart, Github, Twitter, Linkedin, LogIn, UserPlus } from 'lucide-react';
+import { Loader2, Sparkles, Code2, Globe, Heart, Github, Twitter, Linkedin, LogIn, UserPlus, BookOpen, Database } from 'lucide-react';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import ChallengesPage from './components/Challenges/ChallengesPage';
+import ResourcesPage from './components/Resources/ResourcesPage';
 import { authService } from './services/supabase';
 
 const ResponsiveNavbar = ({ user, onLogout }) => (
@@ -55,7 +57,7 @@ const ResponsiveNavbar = ({ user, onLogout }) => (
   </nav>
 );
 
-const AnimatedRoutes = ({ user, handleAuthSuccess }) => (
+const HomePage = ({ user, handleAuthSuccess }) => (
   <div className="min-h-[60vh] flex items-center justify-center">
     <div className="text-center">
       <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -65,24 +67,43 @@ const AnimatedRoutes = ({ user, handleAuthSuccess }) => (
         Welcome to Moodle Simulator
       </h2>
       <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto">
-        Your routes and content would be rendered here based on the current navigation state.
+        Practice coding challenges in various languages and database technologies.
       </p>
       {!user && (
-        <div className="flex gap-4 mt-6">
+        <div className="flex gap-4 mt-6 justify-center">
           <Link 
-            to="/login"
+            to="/challenges"
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-2"
           >
-            <LogIn size={18} />
-            Login
+            <Database size={18} />
+            Browse Challenges
           </Link>
           <Link 
-            to="/register"
+            to="/resources"
             className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-2"
           >
-            <UserPlus size={18} />
-            Register
+            <BookOpen size={18} />
+            View Resources
           </Link>
+        </div>
+      )}
+      {user && (
+        <div className="mt-8 p-6 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-sm max-w-2xl mx-auto">
+          <h3 className="text-xl font-semibold mb-4">Quick Stats</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">0</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Completed Challenges</div>
+            </div>
+            <div className="p-4 bg-green-50 dark:bg-green-900/30 rounded-lg">
+              <div className="text-3xl font-bold text-green-600 dark:text-green-400">0%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average Score</div>
+            </div>
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+              <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">0</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Ranking</div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -311,9 +332,19 @@ const AppContent = () => {
         ) : (
           <div className="container mx-auto px-4 py-8 animate-fade-in">
             <Routes>
-              <Route path="/" element={<AnimatedRoutes user={user} handleAuthSuccess={handleAuthSuccess} />} />
-              <Route path="/login" element={<Login onLogin={handleAuthSuccess} />} />
-              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<HomePage user={user} handleAuthSuccess={handleAuthSuccess} />} />
+              <Route path="/challenges" element={<ChallengesPage user={user} />} />
+              <Route path="/resources" element={<ResourcesPage user={user} />} />
+              <Route path="/login" element={
+                <div className="flex justify-center items-center py-8">
+                  <Login onLogin={handleAuthSuccess} />
+                </div>
+              } />
+              <Route path="/register" element={
+                <div className="flex justify-center items-center py-8">
+                  <Register />
+                </div>
+              } />
             </Routes>
           </div>
         )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { User, Mail, Lock, Eye, EyeOff, UserPlus, Check, X, Shield, Star, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/supabase';
@@ -17,8 +17,8 @@ const Register = () => {
 
   const navigate = useNavigate();
 
-  // Password strength checker
-  const checkPasswordStrength = (pass) => {
+  // Password strength checker - memoized to prevent unnecessary recalculations
+  const checkPasswordStrength = useCallback((pass) => {
     let strength = 0;
     if (pass.length >= 8) strength++;
     if (/[A-Z]/.test(pass)) strength++;
@@ -26,15 +26,28 @@ const Register = () => {
     if (/[0-9]/.test(pass)) strength++;
     if (/[^A-Za-z0-9]/.test(pass)) strength++;
     return strength;
-  };
+  }, []);
 
-  const handlePasswordChange = (e) => {
+  // Memoized input handlers to prevent re-renders
+  const handleUsernameChange = useCallback((e) => {
+    setUsername(e.target.value);
+  }, []);
+  
+  const handleEmailChange = useCallback((e) => {
+    setEmail(e.target.value);
+  }, []);
+  
+  const handlePasswordChange = useCallback((e) => {
     const newPassword = e.target.value;
     setPassword(newPassword);
     setPasswordStrength(checkPasswordStrength(newPassword));
-  };
+  }, [checkPasswordStrength]);
+  
+  const handleConfirmPasswordChange = useCallback((e) => {
+    setConfirmPassword(e.target.value);
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
 
@@ -74,7 +87,7 @@ const Register = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [username, email, password, confirmPassword, navigate, passwordStrength]);
 
   const getPasswordStrengthColor = () => {
     if (passwordStrength <= 1) return 'bg-red-500';
@@ -213,34 +226,66 @@ const Register = () => {
 
           {/* Registration form */}
           <div className="space-y-6">
-            <InputField
-              icon={User}
-              type="text"
-              name="username"
-              placeholder="Choose a username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <User size={18} />
+              </div>
+              <input
+                type="text"
+                id="username"
+                className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border ${focusedField === 'username' ? 'border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus:outline-none transition-all duration-200`}
+                placeholder="Choose a username"
+                value={username}
+                onChange={handleUsernameChange}
+                onFocus={() => setFocusedField('username')}
+                onBlur={() => setFocusedField('')}
+                required
+                autoComplete="username"
+              />
+            </div>
 
-            <InputField
-              icon={Mail}
-              type="email"
-              name="email"
-              placeholder="Enter your email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <Mail size={18} />
+              </div>
+              <input
+                type="email"
+                id="email"
+                className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border ${focusedField === 'email' ? 'border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus:outline-none transition-all duration-200`}
+                placeholder="Enter your email address"
+                value={email}
+                onChange={handleEmailChange}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField('')}
+                required
+                autoComplete="email"
+              />
+            </div>
 
-            <InputField
-              icon={Lock}
-              type="password"
-              name="password"
-              placeholder="Create a strong password"
-              value={password}
-              onChange={handlePasswordChange}
-              showToggle={showPassword}
-              hasStrength={true}
-            />
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <Lock size={18} />
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                className={`w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-gray-700 border ${focusedField === 'password' ? 'border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus:outline-none transition-all duration-200`}
+                placeholder="Create a secure password"
+                value={password}
+                onChange={handlePasswordChange}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField('')}
+                required
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             {/* Password requirements */}
             {password && (
@@ -254,15 +299,30 @@ const Register = () => {
               </div>
             )}
 
-            <InputField
-              icon={Lock}
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm your password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              showToggle={showConfirmPassword}
-            />
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <Lock size={18} />
+              </div>
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                id="confirmPassword"
+                className={`w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-gray-700 border ${focusedField === 'confirmPassword' ? 'border-blue-500 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus:outline-none transition-all duration-200`}
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChange={handleConfirmPasswordChange}
+                onFocus={() => setFocusedField('confirmPassword')}
+                onBlur={() => setFocusedField('')}
+                required
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             {/* Password match indicator */}
             {confirmPassword && (
