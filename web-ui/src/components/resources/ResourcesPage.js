@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, FileText, Download, Search, Filter, ExternalLink, Clock, AlertCircle, Plus, Edit, Trash, Upload } from 'lucide-react';
+import { 
+  BookOpen, FileText, Download, Search, Filter, ExternalLink, 
+  Clock, AlertCircle, Plus, Edit, Trash, Upload,
+  FilePdf, Video, PresentationChartLine, Image, File
+} from 'lucide-react';
 import { authService, documentService } from '../../services/supabase';
 
 const ResourcesPage = ({ user }) => {
@@ -679,7 +683,8 @@ const ResourcesPage = ({ user }) => {
               onClick={() => {
                 if (window.confirm('Are you sure you want to reset the resources?')) {
                   localStorage.removeItem('userResources');
-                  setResources(dataService.getResources());
+                  // Reset resources from storage
+                  documentService.listDocuments().then(docs => setResources(docs || []));
                 }
               }}
             >
