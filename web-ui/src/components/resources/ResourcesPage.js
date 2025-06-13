@@ -14,11 +14,21 @@ const ResourcesPage = ({ user }) => {
     const fetchResources = async () => {
       try {
         setLoading(true);
-        // This will be replaced with actual Supabase fetch when backend is ready
-        // const { data, error } = await authService.supabase.from('resources').select('*');
+        setError(null);
         
-        // For now, using mock data
-        const mockData = [
+        // Try to fetch from API if available, otherwise use mock data
+        let resourceData = [];
+        
+        try {
+          // This will be replaced with actual Supabase fetch when backend is ready
+          // const { data, error } = await authService.supabase.from('resources').select('*');
+          // if (error) throw new Error(error.message);
+          // resourceData = data;
+          throw new Error('API not yet implemented'); // Remove this when API is ready
+        } catch (apiError) {
+          console.log('Using mock data instead of API:', apiError.message);
+          // For now, using mock data
+          resourceData = [
           {
             id: 1,
             title: 'Python Programming Guide',
@@ -81,11 +91,14 @@ const ResourcesPage = ({ user }) => {
           }
         ];
         
-        // Simulate API delay
+          ];
+        }
+        
+        // Simulate API delay for better UX
         setTimeout(() => {
-          setResources(mockData);
+          setResources(resourceData);
           setLoading(false);
-        }, 800);
+        }, 500);
         
       } catch (err) {
         console.error('Error fetching resources:', err);

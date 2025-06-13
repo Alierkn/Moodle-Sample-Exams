@@ -617,17 +617,20 @@ const ChallengePage = () => {
         const fetchChallenges = async () => {
             setLoading(true);
             try {
-                // Use the API service to fetch challenges
-                const data = await apiService.getChallenges().catch(() => mockChallenges);
-                setChallenges(data || mockChallenges);
-
+                // Use the API service to fetch challenges with safe error handling
+                const response = await apiService.getChallenges();
+                // Handle different response formats
+                const challengeData = response?.challenges || response || [];
+                const finalData = Array.isArray(challengeData) && challengeData.length > 0 ? challengeData : mockChallenges;
+                setChallenges(finalData);
+                
                 // Auto-select first challenge if none selected
-                if (!selectedChallenge && data && data.length > 0) {
-                    setSelectedChallenge(data[0]);
+                if (!selectedChallenge && finalData.length > 0) {
+                    setSelectedChallenge(finalData[0]);
                 } else if (!selectedChallenge && mockChallenges.length > 0) {
                     setSelectedChallenge(mockChallenges[0]);
                 }
-
+                
                 setError(null);
             } catch (err) {
                 console.error('Failed to fetch challenges:', err);
