@@ -8,7 +8,8 @@ import {
 
 // Import API service for data fetching
 import apiService from '../../services/api';
-import dataService from '../../services/dataService';
+import { challengeService } from '../../services/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Lazy load Monaco editor to improve initial page load time
 const MonacoEditor = lazy(() => import('./MonacoEditor'));
@@ -749,8 +750,13 @@ const ChallengePage = () => {
         const fetchChallenges = async () => {
             setLoading(true);
             try {
-                // Artık API yerine dataService kullanıyoruz
-                const challengeData = dataService.getChallenges();
+                // Now using Supabase challengeService instead of localStorage dataService
+                const { success, challenges: challengeData, error: apiError } = await challengeService.getChallenges();
+                
+                if (!success) {
+                    throw new Error(apiError || 'Failed to fetch challenges');
+                }
+                
                 setChallenges(challengeData);
                 
                 // Auto-select first challenge if none selected
@@ -761,7 +767,7 @@ const ChallengePage = () => {
                 setError(null);
             } catch (err) {
                 console.error('Failed to fetch challenges:', err);
-                setError('Challenge verileri yüklenirken bir sorun oluştu.');
+                setError('Failed to load challenges. Please try again later.');
                 setChallenges([]);
             } finally {
                 setLoading(false);

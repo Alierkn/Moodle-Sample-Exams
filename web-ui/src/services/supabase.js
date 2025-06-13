@@ -335,20 +335,62 @@ export const documentService = {
   },
 
   /**
-   * List documents in Supabase storage
+   * List documents in Supabase storage along with their metadata
    * @param {string} path - Path to list documents from
-   * @returns {Promise} - List result
+   * @returns {Promise} - List result with merged documents and metadata
    */
   listDocuments: async (path = '') => {
     try {
-      const { data, error } = await supabase
+      // Get files from storage
+      const { data: files, error: filesError } = await supabase
         .storage
         .from('documents')
         .list(path);
 
-      if (error) throw error;
+      if (filesError) throw filesError;
       
-      return { success: true, documents: data };
+      // If no files found, return empty array
+      if (!files || files.length === 0) {
+        return { success: true, documents: [] };
+      }
+
+      // Get metadata for all files
+      const { data: metadataRecords, error: metadataError } = await supabase
+        .from('document_metadata')
+        .select('*');
+
+      if (metadataError) {
+        console.warn('Error fetching document metadata:', metadataError);
+        // Continue without metadata rather than failing completely
+      }
+
+      // Create a map of filename to metadata for quick lookup
+      const metadataMap = {};
+      if (metadataRecords && metadataRecords.length > 0) {
+        metadataRecords.forEach(record => {
+          if (record.filename) {
+            metadataMap[record.filename] = record;
+          }
+        });
+      }
+
+      // Merge file information with metadata
+      const documents = files.map(file => {
+        const metadata = metadataMap[file.name] || {};
+        return {
+          ...file,
+          metadata: {
+            description: metadata.description || '',
+            type: metadata.type || 'document',
+            category: metadata.category || 'general',
+            size: file.metadata?.size || 0,
+            uploadedBy: metadata.uploaded_by || null,
+            lastModified: metadata.updated_at || file.created_at
+          }
+        };
+      });
+      
+      return { success: true, documents };
     } catch (error) {
       console.error('List documents error:', error);
       return { success: false, error: error.message, documents: [] };
@@ -377,22 +419,68 @@ export const documentService = {
   },
 
   /**
-   * Delete a document from Supabase storage
-   * @param {string} path - Path to the document
+   * Delete a document from Supabase storage and its metadata
+   * @param {string} path - Path to the document (filename)
    * @returns {Promise} - Deletion result
    */
   deleteDocument: async (path) => {
     try {
-      const { error } = await supabase
+      // First, delete the metadata record
+      const { error: metadataError } = await supabase
+        .from('document_metadata')
+        .delete()
+        .eq('filename', path);
+
+      if (metadataError) {
+        // Log but continue - we still want to try deleting the file
+        console.warn('Failed to delete document metadata:', metadataError);
+      }
+      
+      // Then delete the actual file from storage
+      const { error: storageError } = await supabase
         .storage
         .from('documents')
         .remove([path]);
+
+      if (storageError) throw storageError;
+      
+      return { 
+        success: true, 
+        message: metadataError ? 'File deleted but metadata deletion failed' : 'File and metadata deleted successfully' 
+      };
+    } catch (error) {
+      console.error('Delete document error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  
+  /**
+   * Update document metadata in Supabase storage
+   * @param {string} path - Path to the document
+   * @param {Object} metadata - Metadata to update
+   * @returns {Promise} - Update result
+   */
+  updateDocumentMetadata: async (path, metadata) => {
+    try {
+      // In Supabase, we need to use a custom table for metadata since storage
+      // doesn't directly support custom metadata fields for files
+      const { error } = await supabase
+        .from('document_metadata')
+        .upsert([
+          {
+            path,
+            title: metadata.title,
+            description: metadata.description,
+            category: metadata.category,
+            updated_at: new Date().toISOString()
+          }
+        ]);
 
       if (error) throw error;
       
       return { success: true };
     } catch (error) {
-      console.error('Delete document error:', error);
+      console.error('Update document metadata error:', error);
       return { success: false, error: error.message };
     }
   }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -9,7 +9,7 @@ import { Loader2 } from 'lucide-react';
  * @param {boolean} props.requireAdmin - Whether the route requires admin access
  * @returns {JSX.Element} Protected route component
  */
-const ProtectedRoute = ({ requireAdmin = false }) => {
+const ProtectedRoute = ({ requireAdmin = false, children }) => {
   const { user, loading, isAdmin } = useAuth();
   const location = useLocation();
 
@@ -34,7 +34,7 @@ const ProtectedRoute = ({ requireAdmin = false }) => {
   }
 
   // User is authenticated (and is admin if required)
-  return <Outlet />;
+  return children;
 };
 
 export default ProtectedRoute;
