@@ -12,6 +12,9 @@ import apiService from '../../services/api';
 // Lazy load Monaco editor to improve initial page load time
 const MonacoEditor = lazy(() => import('./MonacoEditor'));
 
+// Define monaco as a global to prevent eslint errors
+/* global monaco */
+
 // Mock challenges data as fallback for the system
 
 // Define challenge types outside of component to prevent re-creation

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, FileText, Download, Search, Filter, ExternalLink, Clock } from 'lucide-react';
+import { BookOpen, FileText, Download, Search, Filter, ExternalLink, Clock, AlertCircle } from 'lucide-react';
 import { authService } from '../../services/supabase';
 
 const ResourcesPage = ({ user }) => {
