@@ -3,31 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 // Environment variables should be prefixed with REACT_APP_ for Create React App
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
-const useMockMode = process.env.REACT_APP_MOCK_MODE === 'true';
 
-// Validate Supabase credentials only if not in mock mode
-const hasValidCredentials = 
-  !useMockMode &&
-  supabaseUrl && 
-  supabaseKey && 
-  supabaseUrl !== 'https://example.supabase.co' && 
-  supabaseUrl.includes('supabase.co') &&
-  supabaseKey.length > 20;
-
-// Log mock mode status
-if (useMockMode) {
-  console.log('Running in mock mode - using mock data instead of Supabase API');
-} else if (!hasValidCredentials) {
-  console.log('Using fallback mock data - Supabase credentials not properly configured');
+// Validate Supabase credentials
+if (!supabaseUrl || !supabaseKey || supabaseUrl === 'https://example.supabase.co') {
+  console.error('Supabase credentials are not configured correctly!');
 }
 
 // Create a client with retry and error handling
 let supabase;
-let usingMockClient = false;
 
 try {
-  if (hasValidCredentials) {
-    supabase = createClient(supabaseUrl, supabaseKey, {
+  supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
@@ -51,52 +37,9 @@ try {
         },
       },
     });
-  } else {
-    throw new Error('Invalid Supabase credentials');
-  }
 } catch (error) {
   console.error('Failed to initialize Supabase client:', error);
-  usingMockClient = true;
-  
-  // Provide a mock client for development with reasonable mock data
-  supabase = {
-    auth: {
-      signUp: () => Promise.resolve({ 
-        data: { user: { id: 'mock-user-id', email: 'mock@example.com' } },
-        error: null 
-      }),
-      signInWithPassword: () => Promise.resolve({ 
-        data: { user: { id: 'mock-user-id', email: 'mock@example.com' } },
-        error: null 
-      }),
-      signOut: () => Promise.resolve({ error: null }),
-      getUser: () => Promise.resolve({ 
-        data: { user: { id: 'mock-user-id', email: 'mock@example.com' } },
-        error: null 
-      }),
-    },
-    from: (table) => {
-      return {
-        select: () => ({
-          eq: () => ({
-            single: () => Promise.resolve({
-              data: { id: 'mock-id', username: 'mock-user', points: 100 },
-              error: null
-            })
-          }),
-          order: () => Promise.resolve({
-            data: [
-              { id: 1, title: 'Mock Challenge 1', difficulty: 'Easy', language: 'Python' },
-              { id: 2, title: 'Mock Challenge 2', difficulty: 'Medium', language: 'JavaScript' }
-            ],
-            error: null
-          })
-        }),
-        insert: () => Promise.resolve({ error: null }),
-        update: () => Promise.resolve({ error: null })
-      };
-    }
-  };
+  throw new Error('Cannot initialize the application without proper Supabase credentials');
 }
 
 /**
@@ -316,6 +259,99 @@ export const challengeService = {
       return { success: false, error: error.message };
     }
   },
+};
+
+/**
+ * Document service for Supabase storage
+ */
+export const documentService = {
+  /**
+   * Upload a document to Supabase storage
+   * @param {File} file - File to upload
+   * @param {string} path - Path in the bucket to store the file
+   * @returns {Promise} - Upload result
+   */
+  uploadDocument: async (file, path = '') => {
+    try {
+      const fileName = `${Date.now()}_${file.name}`;
+      const filePath = path ? `${path}/${fileName}` : fileName;
+      
+      const { data, error } = await supabase
+        .storage
+        .from('documents')
+        .upload(filePath, file);
+
+      if (error) throw error;
+      
+      return { success: true, document: data };
+    } catch (error) {
+      console.error('Upload document error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * List documents in Supabase storage
+   * @param {string} path - Path to list documents from
+   * @returns {Promise} - List result
+   */
+  listDocuments: async (path = '') => {
+    try {
+      const { data, error } = await supabase
+        .storage
+        .from('documents')
+        .list(path);
+
+      if (error) throw error;
+      
+      return { success: true, documents: data };
+    } catch (error) {
+      console.error('List documents error:', error);
+      return { success: false, error: error.message, documents: [] };
+    }
+  },
+
+  /**
+   * Get a public URL for a document
+   * @param {string} path - Path to the document
+   * @returns {Promise} - URL result
+   */
+  getDocumentUrl: async (path) => {
+    try {
+      const { data, error } = await supabase
+        .storage
+        .from('documents')
+        .getPublicUrl(path);
+
+      if (error) throw error;
+      
+      return { success: true, url: data.publicUrl };
+    } catch (error) {
+      console.error('Get document URL error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Delete a document from Supabase storage
+   * @param {string} path - Path to the document
+   * @returns {Promise} - Deletion result
+   */
+  deleteDocument: async (path) => {
+    try {
+      const { error } = await supabase
+        .storage
+        .from('documents')
+        .remove([path]);
+
+      if (error) throw error;
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Delete document error:', error);
+      return { success: false, error: error.message };
+    }
+  }
 };
 
 export default supabase;
