@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // Import API service for data fetching
-import { getChallenges } from '../../services/api';
+import apiService from '../../services/api';
 
 // Lazy load Monaco editor to improve initial page load time
 const MonacoEditor = lazy(() => import('./MonacoEditor'));
@@ -615,7 +615,7 @@ const ChallengePage = () => {
             setLoading(true);
             try {
                 // Use the API service to fetch challenges
-                const data = await getChallenges().catch(() => mockChallenges);
+                const data = await apiService.getChallenges().catch(() => mockChallenges);
                 setChallenges(data || mockChallenges);
 
                 // Auto-select first challenge if none selected
