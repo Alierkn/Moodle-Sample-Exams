@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo, useCallback, memo, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense, memo } from 'react';
 import {
     Code, Trophy, Clock, Target, Search, CheckCircle, Star, Zap,
     TrendingUp, BookOpen, Settings, Maximize2, Minimize2,
     Users, RotateCcw, Award, ChevronRight, Flame, Crown, Brain,
-    Play, AlertCircle, FileText, TestTube, ListChecks
+    Play, AlertCircle, FileText, TestTube, ListChecks, Edit, Trash, Plus, Filter, RefreshCw
 } from 'lucide-react';
 
 // Import API service for data fetching
 import apiService from '../../services/api';
+import dataService from '../../services/dataService';
 
 // Lazy load Monaco editor to improve initial page load time
 const MonacoEditor = lazy(() => import('./MonacoEditor'));
@@ -84,7 +85,7 @@ const mockChallenges = [
  * Challenge list component - Displays a filterable, sortable list of coding challenges
  * Optimized with memo to prevent unnecessary re-renders
  */
-const ChallengeList = memo(({ onSelectChallenge, challenges, selectedChallenge }) => {
+const ChallengeList = memo(({ onSelectChallenge, challenges, selectedChallenge, onEditChallenge, onDeleteChallenge }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDifficulty, setSelectedDifficulty] = useState('All');
     const [selectedLanguage, setSelectedLanguage] = useState('All');
@@ -112,19 +113,30 @@ const ChallengeList = memo(({ onSelectChallenge, challenges, selectedChallenge }
         }
     };
 
-    // useMemo'ya bağımlılıklar eklendi.
+    // Filter challenges by selected language with defensive programming
     const filteredChallenges = useMemo(() => {
-        return challenges
-            .filter(challenge =>
-                challenge.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                challenge.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-            )
-            .filter(challenge =>
-                selectedDifficulty === 'All' || challenge.difficulty === selectedDifficulty
-            )
-            .filter(challenge =>
-                selectedLanguage === 'All' || challenge.language === selectedLanguage
-            )
+        // Ensure challenges is always an array
+        const safeArray = Array.isArray(challenges) ? challenges : [];
+        
+        return safeArray
+            .filter(challenge => {
+                if (!challenge) return false;
+                if (selectedLanguage === 'All') return true;
+                return challenge.language === selectedLanguage;
+            })
+            .filter(challenge => {
+                if (!challenge) return false;
+                if (selectedDifficulty === 'All') return true;
+                return challenge.difficulty === selectedDifficulty;
+            })
+            .filter(challenge => {
+                if (!challenge) return false;
+                if (!searchTerm) return true;
+                const term = searchTerm.toLowerCase();
+                const title = challenge.title?.toLowerCase() || '';
+                const description = challenge.description?.toLowerCase() || '';
+                return title.includes(term) || description.includes(term);
+            })
             .sort((a, b) => {
                 switch (sortBy) {
                     case 'points': return b.points - a.points;
@@ -242,10 +254,29 @@ const ChallengeList = memo(({ onSelectChallenge, challenges, selectedChallenge }
                                     <Clock className="w-3 h-3" />
                                     {challenge.timeLimit}m
                                 </span>
-                                <span className="flex items-center gap-1 hover:text-green-500 transition-colors">
-                                    <TrendingUp className="w-3 h-3" />
-                                    {challenge.successRate}%
-                                </span>
+                                
+                                {onEditChallenge && onDeleteChallenge && (
+                                  <span className="flex items-center gap-2">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditChallenge(challenge);
+                                      }}
+                                      className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                    >
+                                      <Edit className="w-3 h-3 text-blue-500" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteChallenge(challenge.id);
+                                      }}
+                                      className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                                    >
+                                      <Trash className="w-3 h-3 text-red-500" />
+                                    </button>
+                                  </span>
+                                )}
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-1 mt-2">
@@ -609,39 +640,129 @@ const ChallengePage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('problem');
+    
+    // Challenge yönetimi için state değişkenleri
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingChallenge, setEditingChallenge] = useState(null);
+    const [challengeForm, setChallengeForm] = useState({
+        title: '',
+        description: '',
+        difficulty: 'Easy',
+        language: 'python',
+        points: 100,
+        timeLimit: 30,
+        example: ''
+    });
+    
     // Needed for MonacoEditor integration
     const monacoInstanceRef = useRef(null);
 
+    // CRUD işlemleri için handler fonksiyonları
+    const handleAddChallenge = () => {
+        setIsEditing(true);
+        setEditingChallenge(null);
+        setChallengeForm({
+            title: '',
+            description: '',
+            difficulty: 'Easy',
+            language: 'python',
+            points: 100,
+            timeLimit: 30,
+            example: ''
+        });
+    };
+    
+    const handleEditChallenge = (challenge) => {
+        setIsEditing(true);
+        setEditingChallenge(challenge);
+        setChallengeForm({
+            title: challenge.title,
+            description: challenge.description,
+            difficulty: challenge.difficulty,
+            language: challenge.language,
+            points: challenge.points,
+            timeLimit: challenge.timeLimit,
+            example: challenge.example || ''
+        });
+    };
+    
+    const handleDeleteChallenge = (id) => {
+        if (window.confirm('Bu meydan okumayı silmek istediğinize emin misiniz?')) {
+            dataService.deleteChallenge(id);
+            setChallenges(dataService.getChallenges());
+            
+            // Silinen challenge seçili ise, başka bir challenge seç
+            if (selectedChallenge && selectedChallenge.id === id) {
+                const remainingChallenges = dataService.getChallenges();
+                if (remainingChallenges.length > 0) {
+                    setSelectedChallenge(remainingChallenges[0]);
+                } else {
+                    setSelectedChallenge(null);
+                }
+            }
+        }
+    };
+    
+    const handleFormChange = (e) => {
+        const { name, value } = e.target;
+        setChallengeForm(prev => ({
+            ...prev,
+            [name]: name === 'points' || name === 'timeLimit' ? parseInt(value, 10) : value
+        }));
+    };
+    
+    const handleFormSubmit = (e) => {
+        e.preventDefault();
+        
+        if (editingChallenge) {
+            // Mevcut challenge'ı güncelle
+            dataService.updateChallenge(editingChallenge.id, challengeForm);
+        } else {
+            // Yeni challenge ekle
+            dataService.addChallenge(challengeForm);
+        }
+        
+        // Güncellenmiş challenge listesini getir ve düzenleme modundan çık
+        const updatedChallenges = dataService.getChallenges();
+        setChallenges(updatedChallenges);
+        setIsEditing(false);
+        setEditingChallenge(null);
+        
+        // Yeni eklenen veya düzenlenen challenge'ı seç
+        if (!editingChallenge && updatedChallenges.length > 0) {
+            setSelectedChallenge(updatedChallenges[updatedChallenges.length - 1]);
+        } else if (editingChallenge) {
+            const updatedChallenge = updatedChallenges.find(c => c.id === editingChallenge.id);
+            if (updatedChallenge) {
+                setSelectedChallenge(updatedChallenge);
+            }
+        }
+    };
+    
+    const cancelEditing = () => {
+        setIsEditing(false);
+        setEditingChallenge(null);
+    };
+    
     // Fetch challenges on component mount
     useEffect(() => {
         const fetchChallenges = async () => {
             setLoading(true);
             try {
-                // Use the API service to fetch challenges with safe error handling
-                const response = await apiService.getChallenges();
-                // Handle different response formats
-                const challengeData = response?.challenges || response || [];
-                const finalData = Array.isArray(challengeData) && challengeData.length > 0 ? challengeData : mockChallenges;
-                setChallenges(finalData);
+                // Artık API yerine dataService kullanıyoruz
+                const challengeData = dataService.getChallenges();
+                setChallenges(challengeData);
                 
                 // Auto-select first challenge if none selected
-                if (!selectedChallenge && finalData.length > 0) {
-                    setSelectedChallenge(finalData[0]);
-                } else if (!selectedChallenge && mockChallenges.length > 0) {
-                    setSelectedChallenge(mockChallenges[0]);
+                if (!selectedChallenge && challengeData.length > 0) {
+                    setSelectedChallenge(challengeData[0]);
                 }
                 
                 setError(null);
             } catch (err) {
                 console.error('Failed to fetch challenges:', err);
-                setError('Failed to load challenges. Please try again later.');
-                // Fall back to mock data
-                setChallenges(mockChallenges);
-
-                // Auto-select first challenge if none selected
-                if (!selectedChallenge && mockChallenges.length > 0) {
-                    setSelectedChallenge(mockChallenges[0]);
-                }
+                setError('Challenge verileri yüklenirken bir sorun oluştu.');
+                setChallenges([]);
             } finally {
                 setLoading(false);
             }
@@ -685,7 +806,9 @@ const ChallengePage = () => {
 
     // Stats calculated with useMemo for performance optimization
     const stats = useMemo(() => {
-        const completed = challenges.filter(c => c.completed || false);
+        // Ensure challenges is always an array before applying filter
+        const challengesArray = Array.isArray(challenges) ? challenges : [];
+        const completed = challengesArray.filter(c => c.completed || false);
         const totalPoints = completed.reduce((sum, c) => sum + (c.points || 0), 0);
         const totalBestScore = completed.reduce((sum, c) => sum + (c.bestScore || 0), 0);
         const averageScore = completed.length > 0 ? totalBestScore / completed.length : 0;
@@ -788,12 +911,161 @@ const ChallengePage = () => {
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    <div className="xl:col-span-1">
-                        <ChallengeList
-                            challenges={challenges}
-                            onSelectChallenge={handleSelectChallenge}
-                            selectedChallenge={selectedChallenge}
-                        />
+                    <div className="xl:col-span-1 relative">
+                        {!isEditing ? (
+                            <>
+                                <ChallengeList
+                                    challenges={challenges}
+                                    onSelectChallenge={handleSelectChallenge}
+                                    selectedChallenge={selectedChallenge}
+                                    onEditChallenge={handleEditChallenge}
+                                    onDeleteChallenge={handleDeleteChallenge}
+                                />
+                                <div className="absolute bottom-6 left-0 right-0 flex justify-center space-x-2">
+                                    <button 
+                                        onClick={handleAddChallenge}
+                                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md shadow-sm text-sm font-medium flex items-center gap-1"
+                                    >
+                                        <Plus size={16} />
+                                        <span>Yeni Ekle</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            if (window.confirm('Varsayılan challenge verilerini geri yüklemek istediğinize emin misiniz? Tüm değişiklikleriniz kaybolacaktır.')) {
+                                                dataService.resetChallenges();
+                                                setChallenges(dataService.getChallenges());
+                                                if (dataService.getChallenges().length > 0) {
+                                                    setSelectedChallenge(dataService.getChallenges()[0]);
+                                                }
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-sm text-sm font-medium flex items-center gap-1"
+                                    >
+                                        <RefreshCw size={16} />
+                                        <span>Varsayılan Verileri Geri Yükle</span>
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6">
+                                <h2 className="text-xl font-bold mb-4">{editingChallenge ? 'Challenge Düzenle' : 'Yeni Challenge Ekle'}</h2>
+                                <form onSubmit={handleFormSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Başlık</label>
+                                        <input
+                                            type="text"
+                                            name="title"
+                                            value={challengeForm.title}
+                                            onChange={handleFormChange}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Açıklama</label>
+                                        <textarea
+                                            name="description"
+                                            value={challengeForm.description}
+                                            onChange={handleFormChange}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                            rows="4"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Zorluk</label>
+                                            <select
+                                                name="difficulty"
+                                                value={challengeForm.difficulty}
+                                                onChange={handleFormChange}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                            >
+                                                <option value="Easy">Kolay</option>
+                                                <option value="Medium">Orta</option>
+                                                <option value="Hard">Zor</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Programlama Dili</label>
+                                            <select
+                                                name="language"
+                                                value={challengeForm.language}
+                                                onChange={handleFormChange}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                            >
+                                                <option value="python">Python</option>
+                                                <option value="javascript">JavaScript</option>
+                                                <option value="sql">SQL</option>
+                                                <option value="cypher">Neo4j (Cypher)</option>
+                                                <option value="mongodb">MongoDB</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Puan</label>
+                                            <input
+                                                type="number"
+                                                name="points"
+                                                min="10"
+                                                max="1000"
+                                                value={challengeForm.points}
+                                                onChange={handleFormChange}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                                required
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Süre Limiti (dakika)</label>
+                                            <input
+                                                type="number"
+                                                name="timeLimit"
+                                                min="1"
+                                                max="120"
+                                                value={challengeForm.timeLimit}
+                                                onChange={handleFormChange}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Örnek</label>
+                                        <textarea
+                                            name="example"
+                                            value={challengeForm.example}
+                                            onChange={handleFormChange}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                                            rows="4"
+                                            placeholder="Örnek girdi ve beklenen çıktı bilgisi"
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex justify-end space-x-2 pt-4">
+                                        <button
+                                            type="button"
+                                            onClick={cancelEditing}
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                        >
+                                            İptal
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-sm text-sm font-medium"
+                                        >
+                                            {editingChallenge ? 'Güncelle' : 'Ekle'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
                     </div>
                     <div className="xl:col-span-2">
                         {selectedChallenge ? (

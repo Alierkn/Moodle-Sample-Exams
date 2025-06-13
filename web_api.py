@@ -1,9 +1,13 @@
+""" 
+Unified Web API for the Moodle Exam Simulator
+
+Supports both traditional database (SQL) and Supabase backends
+based on configuration in .env file.
+"""
+
 from flask import Flask, request, jsonify, send_from_directory, redirect, url_for, session
 from flask_cors import CORS
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.middleware.proxy_fix import ProxyFix
-from models import db, User, Challenge, UserChallenge, Resource
+from werkzeug.utils import secure_filename
 import subprocess
 import tempfile
 import os
@@ -16,29 +20,76 @@ import psutil
 from functools import wraps
 from dotenv import load_dotenv
 
+# Load environment variables first to determine backend type
+load_dotenv()
+
+# Determine which backend to use based on environment variable
+BACKEND_TYPE = os.environ.get('BACKEND_TYPE', 'traditional').lower()
+
+if BACKEND_TYPE == 'supabase':
+    # Import Supabase client if specified
+    try:
+        from supabase_client import SupabaseClient
+        supabase = SupabaseClient()
+        print("✅ Using Supabase backend")
+    except ImportError:
+        print("❌ Supabase client not found. Falling back to traditional backend.")
+        BACKEND_TYPE = 'traditional'
+else:
+    # Traditional database setup
+    from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+    from werkzeug.security import generate_password_hash, check_password_hash
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    from models import db, User, Challenge, UserChallenge, Resource
+
 # Import monitoring and health check modules
 from monitoring import track_performance, api_performance_monitor, track_event, track_errors, logger
 from health_check import health_check_service
 from health_api import health_api
-
-# Load environment variables
-load_dotenv()
 
 # Import Moodle Exam Simulator module
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 try:
     from moodle_exam_simulator import CodeTester
 except ImportError:
-    print("Moodle Exam Simulator module not found.")
+    print("❌ Error: Moodle Exam Simulator module not found. Functionality will be limited.")
+    CodeTester = None
 
 # Logging is now handled by the monitoring module
 
+# Initialize Flask app
 app = Flask(__name__, static_folder='web-ui/build')
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///moodle_exam_simulator.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JSON_SORT_KEYS'] = False  # Preserve JSON order for better performance
+CORS(app)
+
+# Configure app
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'moodle-exam-simulator-default-key')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+
+# Create uploads folder if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Configure database if using traditional backend
+if BACKEND_TYPE == 'traditional':
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///moodle_exam.db')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Initialize database
+    db.init_app(app)
+    
+    # Initialize login manager
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+
+# Apply WSGI middleware only for traditional backend
+if BACKEND_TYPE == 'traditional':
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configure cache settings
 app.config['CACHE_TTL'] = int(os.environ.get('CACHE_TTL', 3600))  # Default 1 hour
@@ -46,18 +97,8 @@ app.config['MAX_RETRIES'] = int(os.environ.get('MAX_RETRIES', 3))
 app.config['RETRY_DELAY'] = int(os.environ.get('RETRY_DELAY', 1000))  # milliseconds
 app.config['API_VERSION'] = os.environ.get('API_VERSION', '1.1.0')
 
-CORS(app, supports_credentials=True)  # Enable Cross-Origin Resource Sharing with credentials
-
-# Initialize database
-db.init_app(app)
-
-# Register health API blueprint
-app.register_blueprint(health_api, url_prefix='/api')
-
-# Initialize login manager
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# Register health check blueprint
+app.register_blueprint(health_api, url_prefix='/api/health')
 
 # Performance monitoring is now handled by the monitoring module
 # This legacy decorator is kept for backward compatibility

@@ -1,29 +1,101 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize the Supabase client
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://your-project-url.supabase.co';
-const supabaseKey = process.env.REACT_APP_SUPABASE_KEY || 'your-anon-key';
+// Environment variables should be prefixed with REACT_APP_ for Create React App
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
+const useMockMode = process.env.REACT_APP_MOCK_MODE === 'true';
 
-// Check if environment variables are set
-if (!supabaseUrl || !supabaseKey || supabaseUrl === 'https://your-project-url.supabase.co') {
-  console.warn('Supabase environment variables are not set or are using default values. Authentication will not work properly.');
-  console.warn('Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_KEY in your .env file.');
+// Validate Supabase credentials only if not in mock mode
+const hasValidCredentials = 
+  !useMockMode &&
+  supabaseUrl && 
+  supabaseKey && 
+  supabaseUrl !== 'https://example.supabase.co' && 
+  supabaseUrl.includes('supabase.co') &&
+  supabaseKey.length > 20;
+
+// Log mock mode status
+if (useMockMode) {
+  console.log('Running in mock mode - using mock data instead of Supabase API');
+} else if (!hasValidCredentials) {
+  console.log('Using fallback mock data - Supabase credentials not properly configured');
 }
 
-// Create a mock client if we're in development and no valid credentials
+// Create a client with retry and error handling
 let supabase;
+let usingMockClient = false;
+
 try {
-  supabase = createClient(supabaseUrl, supabaseKey);
+  if (hasValidCredentials) {
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+      },
+      global: {
+        // Add fetch retry options for increased reliability
+        fetch: async (url, options = {}) => {
+          const MAX_RETRIES = 3;
+          let error;
+          
+          for (let i = 0; i < MAX_RETRIES; i++) {
+            try {
+              return await fetch(url, options);
+            } catch (err) {
+              error = err;
+              // Exponential backoff: 200ms, 400ms, 800ms
+              await new Promise(r => setTimeout(r, 200 * Math.pow(2, i)));
+            }
+          }
+          throw error;
+        },
+      },
+    });
+  } else {
+    throw new Error('Invalid Supabase credentials');
+  }
 } catch (error) {
   console.error('Failed to initialize Supabase client:', error);
-  // Provide a mock client for development that won't throw errors
+  usingMockClient = true;
+  
+  // Provide a mock client for development with reasonable mock data
   supabase = {
     auth: {
-      signUp: () => Promise.resolve({ user: null, error: { message: 'Mock: Supabase not configured' } }),
-      signInWithPassword: () => Promise.resolve({ user: null, error: { message: 'Mock: Supabase not configured' } }),
+      signUp: () => Promise.resolve({ 
+        data: { user: { id: 'mock-user-id', email: 'mock@example.com' } },
+        error: null 
+      }),
+      signInWithPassword: () => Promise.resolve({ 
+        data: { user: { id: 'mock-user-id', email: 'mock@example.com' } },
+        error: null 
+      }),
       signOut: () => Promise.resolve({ error: null }),
-      getUser: () => Promise.resolve({ user: null }),
+      getUser: () => Promise.resolve({ 
+        data: { user: { id: 'mock-user-id', email: 'mock@example.com' } },
+        error: null 
+      }),
     },
+    from: (table) => {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({
+              data: { id: 'mock-id', username: 'mock-user', points: 100 },
+              error: null
+            })
+          }),
+          order: () => Promise.resolve({
+            data: [
+              { id: 1, title: 'Mock Challenge 1', difficulty: 'Easy', language: 'Python' },
+              { id: 2, title: 'Mock Challenge 2', difficulty: 'Medium', language: 'JavaScript' }
+            ],
+            error: null
+          })
+        }),
+        insert: () => Promise.resolve({ error: null }),
+        update: () => Promise.resolve({ error: null })
+      };
+    }
   };
 }
 

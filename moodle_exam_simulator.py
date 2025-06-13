@@ -1,103 +1,149 @@
+"""Moodle Exam Simulator Core Module
+
+This module contains the core functionality for the Moodle Exam Simulator,
+including database environment simulation, code testing, and practice exams.
+"""
+
 import subprocess
 import sys
 import json
 import os
+import time
 import tempfile
 import traceback
-from typing import Dict, Any, Tuple, List
-import docker
-from pymongo import MongoClient
-from neo4j import GraphDatabase
-import sqlite3
-import psycopg2
-import mysql.connector
+from typing import Dict, Any, Tuple, List, Optional
+import importlib
+
+# Lazy import docker to speed up initial loading
+docker = None
 
 class ExamEnvironmentSimulator:
+    """Simulates database environments using Docker containers."""
+    
     def __init__(self):
         self.docker_client = None
         self.containers = {}
-        self.setup_docker()
+        # Docker will be set up lazily when needed to avoid unnecessary imports
         
     def setup_docker(self):
-        """Initialize Docker client"""
+        """Initialize Docker client (lazy loading)"""
+        global docker
+        
+        if self.docker_client is not None:
+            return  # Already initialized
+            
         try:
+            # Import docker only when needed
+            if docker is None:
+                docker = importlib.import_module('docker')
+                
             self.docker_client = docker.from_env()
             print("✓ Docker connection successful")
+            return True
+        except ImportError:
+            print("⚠️ Docker module not found. Please install: pip install docker")
+            return False
         except Exception as e:
-            print(f"⚠️  Docker connection failed: {e}")
+            print(f"⚠️ Docker connection failed: {e}")
             print("Make sure Docker Desktop is running!")
+            return False
     
     def start_databases(self):
         """Start required databases as Docker containers for testing"""
         print("\n🚀 Starting databases...")
         
-        # Neo4j
-        try:
-            neo4j_container = self.docker_client.containers.run(
-                "neo4j:latest",
-                environment={
-                    "NEO4J_AUTH": "neo4j/password123",
-                    "NEO4J_dbms_memory_heap_max__size": "512M"
+        # Ensure Docker is initialized
+        if not self.docker_client and not self.setup_docker():
+            print("❌ Cannot start databases: Docker not available")
+            return False
+        
+        # Define database configurations
+        db_configs = {
+            'neo4j': {
+                'image': 'neo4j:latest',
+                'environment': {
+                    'NEO4J_AUTH': 'neo4j/password123',
+                    'NEO4J_dbms_memory_heap_max__size': '512M'
                 },
-                ports={'7687/tcp': 7688, '7474/tcp': 7475},
-                detach=True,
-                name="exam_neo4j",
-                remove=True
-            )
-            self.containers['neo4j'] = neo4j_container
-            print("✓ Neo4j started (port: 7687)")
-        except Exception as e:
-            print(f"⚠️  Failed to start Neo4j: {e}")
-        
-        # MongoDB
-        try:
-            mongo_container = self.docker_client.containers.run(
-                "mongo:latest",
-                ports={'27017/tcp': 27018},
-                detach=True,
-                name="exam_mongodb",
-                remove=True
-            )
-            self.containers['mongodb'] = mongo_container
-            print("✓ MongoDB started (port: 27017)")
-        except Exception as e:
-            print(f"⚠️  Failed to start MongoDB: {e}")
-        
-        # MySQL
-        try:
-            mysql_container = self.docker_client.containers.run(
-                "mysql:latest",
-                environment={
-                    "MYSQL_ROOT_PASSWORD": "password123",
-                    "MYSQL_DATABASE": "exam_db"
+                'ports': {'7687/tcp': 7688, '7474/tcp': 7475},
+                'name': 'exam_neo4j',
+                'display_port': '7687'
+            },
+            'mongodb': {
+                'image': 'mongo:latest',
+                'environment': {},
+                'ports': {'27017/tcp': 27018},
+                'name': 'exam_mongodb',
+                'display_port': '27017'
+            },
+            'mysql': {
+                'image': 'mysql:latest',
+                'environment': {
+                    'MYSQL_ROOT_PASSWORD': 'password123',
+                    'MYSQL_DATABASE': 'exam_db'
                 },
-                ports={'3306/tcp': 3307},
-                detach=True,
-                name="exam_mysql",
-                remove=True
-            )
-            self.containers['mysql'] = mysql_container
-            print("✓ MySQL started (port: 3306)")
-        except Exception as e:
-            print(f"⚠️  Failed to start MySQL: {e}")
+                'ports': {'3306/tcp': 3307},
+                'name': 'exam_mysql',
+                'display_port': '3306'
+            }
+        }
         
-        print("\n⏳ Waiting for databases to be ready (15 seconds)...")
-        import time
-        time.sleep(15)
+        # Start each database
+        success_count = 0
+        for db_type, config in db_configs.items():
+            try:
+                container = self.docker_client.containers.run(
+                    config['image'],
+                    environment=config['environment'],
+                    ports=config['ports'],
+                    detach=True,
+                    name=config['name'],
+                    remove=True
+                )
+                self.containers[db_type] = container
+                print(f"✓ {db_type.capitalize()} started (port: {config['display_port']})")
+                success_count += 1
+            except Exception as e:
+                print(f"⚠️ Failed to start {db_type.capitalize()}: {e}")
+        
+        if success_count > 0:
+            wait_time = int(os.environ.get('DB_STARTUP_WAIT_TIME', '15'))
+            print(f"\n⏳ Waiting for databases to be ready ({wait_time} seconds)...")
+            time.sleep(wait_time)
+            return True
+        else:
+            print("❌ No databases were started successfully.")
+            return False
         
     def stop_databases(self):
-        """Stop containers"""
-        print("🛑 Stopping databases...")
-        for name, container in self.containers.items():
+        """Stop containers and clean up resources"""
+        print("🚫 Stopping databases...")
+        
+        if not self.containers:
+            print("ℹ️ No databases to stop")
+            return
+            
+        for name, container in list(self.containers.items()):
             try:
-                container.stop()
-                print(f"✓ {name} stopped")
-            except:
-                pass
+                container.stop(timeout=10)  # Give containers 10 seconds to shutdown gracefully
+                print(f"✓ {name.capitalize()} stopped")
+            except Exception as e:
+                print(f"⚠️ Failed to stop {name}: {str(e)}")
+            finally:
+                # Clean up the container reference regardless of stop success
+                self.containers.pop(name, None)
+        
+        # Give Docker some time to release resources
+        time.sleep(2)
 
 class CodeTester:
+    """Tests code execution for various languages and databases."""
+    
     def __init__(self):
         self.test_results = []
+        # Database modules will be imported only when needed
+        self._neo4j_driver = None
+        self._mongo_client = None
         
     def test_python_code(self, code: str, expected_output: str = None, 
                         test_cases: List[Dict] = None) -> Dict[str, Any]:
@@ -182,20 +228,27 @@ exec(open('{filename}').read())
         return test_result
     
     def test_neo4j_query(self, query: str, setup_queries: List[str] = None) -> Dict[str, Any]:
-        """Test Neo4j query"""
+        """Test Neo4j query with lazy importing"""
         result = {
-            "language": "Neo4j",
+            "language": "Neo4j Cypher",
             "success": False,
             "output": "",
             "error": "",
-            "data": []
+            "test_results": []
         }
         
         try:
-            driver = GraphDatabase.driver(
-                "bolt://localhost:7688",
-                auth=("neo4j", "password123")
-            )
+            # Import Neo4j only when needed
+            if not hasattr(self, 'GraphDatabase') or self.GraphDatabase is None:
+                try:
+                    from neo4j import GraphDatabase
+                    self.GraphDatabase = GraphDatabase
+                except ImportError:
+                    result["error"] = "Neo4j library not installed. Run: pip install neo4j"
+                    return result
+            
+            # Connect to Neo4j
+            driver = self.GraphDatabase.driver("bolt://localhost:7688", auth=("neo4j", "password123"))
             
             with driver.session() as session:
                 # Run setup queries
@@ -203,23 +256,32 @@ exec(open('{filename}').read())
                     for setup_query in setup_queries:
                         session.run(setup_query)
                 
-                # Run the main query
-                records = session.run(query)
-                result["data"] = [dict(record) for record in records]
-                result["output"] = json.dumps(result["data"], indent=2)
-                result["success"] = True
+                # Execute the query
+                query_result = session.run(query)
+                records = list(query_result)
                 
-            driver.close()
+                # Format the output
+                if records:
+                    # More structured output for better readability
+                    output_lines = []
+                    for i, record in enumerate(records):
+                        output_lines.append(f"Record {i+1}: {record}")
+                    result["output"] = "\n".join(output_lines)
+                else:
+                    result["output"] = "(No records returned)"
+                
+                result["success"] = True
             
+            driver.close()
         except Exception as e:
-            result["error"] = f"Neo4j Error: {str(e)}"
+            result["error"] = f"Neo4j error: {str(e)}"
             
         return result
     
     def test_mongodb_query(self, db_name: str, collection_name: str, 
                           operation: str, query_data: Dict = None,
                           setup_data: List[Dict] = None) -> Dict[str, Any]:
-        """Test MongoDB query"""
+        """Test MongoDB query with lazy importing"""
         result = {
             "language": "MongoDB",
             "success": False,
@@ -229,37 +291,85 @@ exec(open('{filename}').read())
         }
         
         try:
-            client = MongoClient('localhost', 27018)
+            # Import MongoDB only when needed
+            if not hasattr(self, 'MongoClient') or self.MongoClient is None:
+                try:
+                    from pymongo import MongoClient
+                    from bson.objectid import ObjectId
+                    self.MongoClient = MongoClient
+                    self.ObjectId = ObjectId
+                except ImportError:
+                    result["error"] = "PyMongo library not installed. Run: pip install pymongo"
+                    return result
+            
+            # Connect to MongoDB
+            client = self.MongoClient('mongodb://localhost:27018/', serverSelectionTimeoutMS=5000)
+            # Test connection
+            client.admin.command('ping')
+            
             db = client[db_name]
             collection = db[collection_name]
             
-            # Insert setup data
-            if setup_data:
-                collection.delete_many({})  # Clear the collection first
-                collection.insert_many(setup_data)
-            
-            # Perform the operation
-            if operation == "find":
-                cursor = collection.find(query_data or {})
-                result["data"] = list(cursor)
-                result["output"] = json.dumps(result["data"], indent=2, default=str)
-                result["success"] = True
-            elif operation == "insert":
-                insert_result = collection.insert_one(query_data)
-                result["output"] = f"Inserted ID: {insert_result.inserted_id}"
-                result["success"] = True
-            elif operation == "update":
-                update_result = collection.update_many(
-                    query_data.get("filter", {}),
-                    query_data.get("update", {})
-                )
-                result["output"] = f"Modified: {update_result.modified_count} documents"
-                result["success"] = True
-            elif operation == "delete":
-                delete_result = collection.delete_many(query_data or {})
-                result["output"] = f"Deleted: {delete_result.deleted_count} documents"
-                result["success"] = True
+            # Clear collection before running tests for clean state
+            if setup_data is not None:
+                collection.delete_many({})  # Clear collection
+                if setup_data:  # Only insert if setup_data is not empty
+                    collection.insert_many(setup_data)
                 
+            # Execute operation with better error handling
+            if operation == 'find':
+                cursor = collection.find(query_data if query_data else {})
+                data = list(cursor)
+                # Convert ObjectId to string for JSON serialization
+                for doc in data:
+                    if '_id' in doc:
+                        doc['_id'] = str(doc['_id'])
+                result["data"] = data
+                result["output"] = json.dumps(data, indent=2)
+                
+            elif operation == 'insert_one':
+                insert_result = collection.insert_one(query_data)
+                result["output"] = f"Inserted document with ID: {insert_result.inserted_id}"
+                
+            elif operation == 'insert_many':
+                insert_result = collection.insert_many(query_data)
+                result["output"] = f"Inserted {len(insert_result.inserted_ids)} documents"
+                
+            elif operation == 'update_one':
+                filter_doc = query_data.get('filter', {})
+                update_doc = query_data.get('update', {})
+                update_result = collection.update_one(filter_doc, update_doc)
+                result["output"] = f"Modified {update_result.modified_count} documents"
+                
+            elif operation == 'update_many':
+                filter_doc = query_data.get('filter', {})
+                update_doc = query_data.get('update', {})
+                update_result = collection.update_many(filter_doc, update_doc)
+                result["output"] = f"Modified {update_result.modified_count} documents"
+                
+            elif operation == 'delete_one':
+                delete_result = collection.delete_one(query_data)
+                result["output"] = f"Deleted {delete_result.deleted_count} documents"
+                
+            elif operation == 'delete_many':
+                delete_result = collection.delete_many(query_data)
+                result["output"] = f"Deleted {delete_result.deleted_count} documents"
+                
+            elif operation == 'aggregate':
+                cursor = collection.aggregate(query_data)
+                data = list(cursor)
+                # Convert ObjectId to string for JSON serialization
+                for doc in data:
+                    if '_id' in doc:
+                        doc['_id'] = str(doc['_id'])
+                result["data"] = data
+                result["output"] = json.dumps(data, indent=2)
+                
+            else:
+                result["error"] = f"Unsupported operation: {operation}"
+                return result
+                
+            result["success"] = True
             client.close()
             
         except Exception as e:
@@ -269,7 +379,7 @@ exec(open('{filename}').read())
     
     def test_sql_query(self, query: str, db_type: str = "sqlite",
                       setup_queries: List[str] = None) -> Dict[str, Any]:
-        """Test SQL query"""
+        """Test SQL query with lazy importing"""
         result = {
             "language": f"SQL ({db_type})",
             "success": False,
@@ -278,54 +388,120 @@ exec(open('{filename}').read())
             "data": []
         }
         
+        conn = None
+        cursor = None
+        
         try:
+            # Connect to the database based on type with lazy imports
             if db_type == "sqlite":
-                conn = sqlite3.connect(':memory:')
+                if not hasattr(self, 'sqlite3') or self.sqlite3 is None:
+                    try:
+                        import sqlite3
+                        self.sqlite3 = sqlite3
+                    except ImportError:
+                        result["error"] = "sqlite3 module not available"
+                        return result
+                conn = self.sqlite3.connect(':memory:')
+                
             elif db_type == "mysql":
-                conn = mysql.connector.connect(
-                    host="localhost",
-                    user="root",
-                    password="password123",
-                    database="exam_db",
-                    port=3307
-                )
+                if not hasattr(self, 'mysql_connector') or self.mysql_connector is None:
+                    try:
+                        import mysql.connector
+                        self.mysql_connector = mysql.connector
+                    except ImportError:
+                        result["error"] = "MySQL Connector not installed. Run: pip install mysql-connector-python"
+                        return result
+                try:    
+                    conn = self.mysql_connector.connect(
+                        host="localhost",
+                        port=3307,
+                        user="root",
+                        password="password123",
+                        database="exam_db",
+                        connection_timeout=5
+                    )
+                except Exception as e:
+                    result["error"] = f"MySQL connection failed: {str(e)}"
+                    return result
+                
             elif db_type == "postgresql":
-                conn = psycopg2.connect(
-                    host="localhost",
-                    database="exam_db",
-                    user="postgres",
-                    password="password123"
-                )
-            
+                if not hasattr(self, 'psycopg2') or self.psycopg2 is None:
+                    try:
+                        import psycopg2
+                        self.psycopg2 = psycopg2
+                    except ImportError:
+                        result["error"] = "psycopg2 not installed. Run: pip install psycopg2-binary"
+                        return result
+                try:
+                    conn = self.psycopg2.connect(
+                        host="localhost",
+                        port=5432,
+                        user="postgres",
+                        password="password123",
+                        database="exam_db",
+                        connect_timeout=5
+                    )
+                except Exception as e:
+                    result["error"] = f"PostgreSQL connection failed: {str(e)}"
+                    return result
+            else:
+                result["error"] = f"Unsupported database type: {db_type}"
+                return result
+                
             cursor = conn.cursor()
             
-            # Run setup queries
+            # Execute setup queries with better error handling
             if setup_queries:
-                for setup_query in setup_queries:
-                    cursor.execute(setup_query)
+                for i, setup_query in enumerate(setup_queries):
+                    try:
+                        cursor.execute(setup_query)
+                    except Exception as e:
+                        result["error"] = f"Error in setup query #{i+1}: {str(e)}\nQuery: {setup_query}"
+                        return result
                 conn.commit()
             
-            # Run the main query
+            # Execute main query
             cursor.execute(query)
             
-            # SELECT query
-            if query.strip().upper().startswith("SELECT"):
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                result["data"] = [dict(zip(columns, row)) for row in rows]
-                result["output"] = json.dumps(result["data"], indent=2)
+            # Fetch results if it's a SELECT query
+            if query.strip().lower().startswith("select"):
+                columns = [column[0] for column in cursor.description]
+                data = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                result["data"] = data
+                
+                # Format the output in a more readable way for terminal display
+                if data:
+                    # Create a formatted table output
+                    table_output = []
+                    # Header
+                    header = " | ".join(columns)
+                    separator = "-" * len(header)
+                    table_output.append(header)
+                    table_output.append(separator)
+                    
+                    # Rows
+                    for row_data in data:
+                        row_values = [str(row_data.get(col, '')) for col in columns]
+                        table_output.append(" | ".join(row_values))
+                    
+                    result["output"] = "\n".join(table_output)
+                else:
+                    result["output"] = "(No data returned)"
             else:
-                conn.commit()
                 result["output"] = f"Query executed successfully. Rows affected: {cursor.rowcount}"
-            
+                conn.commit()
+                
             result["success"] = True
             
-            cursor.close()
-            conn.close()
-            
         except Exception as e:
-            result["error"] = f"SQL Error: {str(e)}"
+            result["error"] = f"SQL Error: {str(e)}\nQuery: {query}"
             
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+                
         return result
 
 
@@ -575,36 +751,79 @@ print(s)
         
         print(f"{'='*50}")
 
-# Install required libraries
-def install_requirements():
-    """Install required libraries"""
-    requirements = [
-        "docker",
-        "pymongo",
-        "neo4j",
-        "mysql-connector-python",
-        "psycopg2-binary"
-    ]
+# Install required libraries on demand
+def install_requirements(only_missing: bool = True) -> None:
+    """Install required libraries
     
-    print("📦 Installing required libraries...")
-    for req in requirements:
+    Args:
+        only_missing: If True, only install packages that are not already installed
+    """
+    requirements = {
+        "docker": "Docker client for container management",
+        "pymongo": "MongoDB client",
+        "neo4j": "Neo4j graph database driver",
+        "mysql-connector-python": "MySQL connector",
+        "psycopg2-binary": "PostgreSQL connector"
+    }
+    
+    print("📦 Checking required libraries...")
+    for req, description in requirements.items():
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", req], 
-                         capture_output=True)
-            print(f"✓ {req} installed")
-        except:
-            print(f"⚠️  Failed to install {req}")
+            if only_missing:
+                # Check if the package is already installed
+                importlib.import_module(req.split('-')[0])  # Handle packages with hyphens
+                print(f"✓ {req} is already installed")
+                continue
+            
+            print(f"Installing {req} ({description})...")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", req],
+                capture_output=True,
+                check=True
+            )
+            print(f"✓ {req} installed successfully")
+        except ImportError:
+            # Package is not installed
+            print(f"Installing {req} ({description})...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", req],
+                    capture_output=True,
+                    check=True
+                )
+                print(f"✓ {req} installed successfully")
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️ Failed to install {req}: {e}")
+        except Exception as e:
+            print(f"⚠️ Error with {req}: {e}")
 
 if __name__ == "__main__":
-    # Check libraries
-    try:
-        import docker
-        import pymongo
-        import neo4j
-    except ImportError:
-        print("⚠️  Some libraries are missing. Installing...")
-        install_requirements()
+    print("📣 Moodle Exam Simulator")
+    print("=======================\n")
     
-    # Start the system
-    system = ExamPracticeSystem()
-    system.start()
+    # Check if Docker is available without importing it first
+    docker_available = False
+    try:
+        # Try to import the Docker module only when needed
+        docker = importlib.import_module('docker')
+        docker_client = docker.from_env()
+        docker_client.ping()
+        docker_available = True
+    except ImportError:
+        print("⚠️ Docker module not found. Some features will be limited.")
+        install_prompt = input("Do you want to install required libraries now? (y/n): ")
+        if install_prompt.lower() in ('y', 'yes'):
+            install_requirements()
+    except Exception:
+        print("⚠️ Docker service not available. Make sure Docker is running.")
+    
+    # Start the system with enhanced error handling
+    try:
+        system = ExamPracticeSystem()
+        system.start()
+    except KeyboardInterrupt:
+        print("\n✔️ Program terminated by user")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        print("See details below:")
+        traceback.print_exc()
