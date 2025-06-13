@@ -3,12 +3,12 @@ import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { Loader2, Sparkles, Code2, Globe, Heart, Github, Twitter, Linkedin, LogIn, UserPlus, BookOpen, Database, Shield } from 'lucide-react';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
-import ChallengePage from './components/Challenges/ChallengePage';
-import ResourcesPage from './components/Resources/ResourcesPage';
+import ChallengePage from './components/challenges/ChallengePage';
+import ResourcesPage from './components/resources/ResourcesPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Unauthorized from './components/auth/Unauthorized';
 import AdminPanel from './components/admin/AdminPanel';
-import Dashboard from './components/Dashboard/Dashboard';
+import Dashboard from './components/dashboard/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Context definitions
