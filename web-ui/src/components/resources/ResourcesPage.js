@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, FileText, Download, Search, Filter, ExternalLink, 
   Clock, AlertCircle, Plus, Edit, Trash, Upload,
-  FilePdf, Video, PresentationChartLine, Image, File
+  File, PieChart, ImageIcon
 } from 'lucide-react';
 import { authService, documentService } from '../../services/supabase';
 
@@ -700,15 +700,15 @@ const ResourcesPage = ({ user }) => {
 const getResourceIcon = (type) => {
   switch (type) {
     case 'pdf':
-      return <FilePdf size={24} />;
+      return <FileText size={24} />;
     case 'video':
-      return <Video size={24} />;
+      return <FileText size={24} />;
     case 'document':
       return <FileText size={24} />;
     case 'presentation':
-      return <PresentationChartLine size={24} />;
+      return <PieChart size={24} />;
     case 'image':
-      return <Image size={24} />;
+      return <ImageIcon size={24} />;
     default:
       return <File size={24} />;
   }
